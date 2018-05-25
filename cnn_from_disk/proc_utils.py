@@ -121,3 +121,13 @@ def imgOpenResize(imgF,w_h = (32,32)):
     imnp=np.asarray(img)
     img.close() #Close opened image
     return imnp,xf,yf
+
+def split_train_test(idf,train_test_proportion=0.8,shuffle=False):
+    rows = idf.shape[0]
+    train_split=int(rows*train_test_proportion)
+    test_split=rows-train_split
+    if shuffle ==True:
+        ttdf = idf.sample(rows).reset_index()
+    train_df = ttdf.head(train_split)
+    test_df = ttdf.tail(test_split)
+    return train_df,test_df
