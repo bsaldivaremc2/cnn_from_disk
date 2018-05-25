@@ -10,17 +10,10 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
         print("No model specified")
         return 0
     tf.reset_default_graph()
-    class_output = iys[1]
-    d0 = ixs[0]
-    x_shape=[None]
-    for _ in range(1,len(ixs)):
-        x_shape.append(ixs[_])
-    xi = tf.placeholder(tf.float32, shape=x_shape,name='x')
-    y_ = tf.placeholder(tf.float32, shape=[None,class_output],name='y')
+    xi = tf.placeholder(tf.float32, shape=ixs,name='x')
+    y_ = tf.placeholder(tf.float32, shape=iys,name='y')
     train_bool=tf.placeholder(bool,name='train_test')
-    
     learning_rate = tf.placeholder(tf.float32)
-    
     #Define the model here--DOWN
     x = xi
     types_dic = {'conv':0,'bn':0,'relu':0,'max_pool':0,'drop_out':0,'fc':0,'res_131':0}
@@ -29,7 +22,6 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
         _type=_[0]
         if _type in ['conv','res_131','fc']:
             last_type=_type
-
         _input=x
         params={'_input':_input}
         #print(_)
@@ -62,20 +54,16 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
         elif _type=='res_131':
             params['is_training']=train_bool
             x = res_131(**params)
-
     prev_conv_fcl = False
     #if model[-1][0] in ['conv','res_131']:
     if last_type in ['conv','res_131']:
         prev_conv_fcl=True
     prediction = fc(x,n=class_output,name_scope="FCL",prev_conv=prev_conv_fcl)
-    
-    #Define the model here--UP
-    
+    ##Define the model here--UP
     #y_CNN = tf.nn.softmax(prediction,name='Softmax')
     #class_pred = tf.argmax(y_CNN,1,name='ClassPred')
     #loss = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_CNN), reduction_indices=[1]),name="loss")
-    
-    if opt_mode=='classification':        
+    if opt_mode=='classification':
         y_CNN = tf.nn.softmax(prediction,name='Softmax')        
         class_pred = tf.argmax(y_CNN,1,name='ClassPred')       
         loss = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_CNN), reduction_indices=[1]),name="loss")
@@ -83,14 +71,14 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
         stats_dic={'acc':acc_,'spe':spe_,'sen_':sen_,'tp':tp_,'tn':tn_,'fp':fp_,'fn':fn_}
     elif (opt_mode=='regression') or (opt_mode=='yolo'):
         loss = tf.reduce_mean(tf.pow(tf.subtract(y_,prediction),2),name='loss')
-        stats_dic={'loss':loss}   
-        
+        stats_dic={'loss':loss}
     #The following three lines are required to make "is_training" work for normalization
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
         train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss)
-
     return [xi,y_,learning_rate,train_bool,loss,train_step,stats_dic]
+
+
 
 def train_model(batch_func,batch_func_params,model=None,iters=10,lr=0.001,
           save_model=True,save_name=None,
