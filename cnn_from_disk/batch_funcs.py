@@ -25,6 +25,34 @@ def batch_pre_proc_from_df(idf,xfunc,yfunc,xfunc_params={},yfunc_params={},x_col
     else:
         return _x.copy()
 
+def batch_pre_proc_from_df_yf(idf,xfunc,yfunc,yfunc2,xfunc_params={},yfunc_params={},yfunc2_params={},x_col='filename',y_col='target',
+                           batch_size=4,offset=4,inference=False):
+    """
+    This function is similar to batch_pre_proc_from_df except that the function that applies to x
+    returns two values, the batch value for x and a value that will later be fed into a second y function
+    yfunc2.
+    """
+    start_index = offset
+    rows = idf.shape[0]
+    if start_index >= rows:
+        start_index = start_index%rows
+    end_index = start_index + batch_size
+    
+    if end_index>rows:
+        end_index = rows
+    
+    tdf = idf.iloc[start_index:end_index]
+    
+    #_x,_yf = tdf[x_col].apply(xfunc,**xfunc_params)
+    _ = tdf[x_col].apply(xfunc,**xfunc_params)
+    _x, _yf = np.vstack(list(map(lambda z: z[0],_))),np.vstack(list(map(lambda z: z[1],_)))
+    
+    if inference == False:
+        _y = np.vstack(tdf[y_col].apply(yfunc,**yfunc_params))
+        _y = yfunc2(_y,_yf,**yfunc2_params)
+        return _x.copy(),_y.copy()
+    else:
+        return _x.copy()
 
 
 def df_xy (df,x_label,y_label,batch_size=5,offset=0,resize_wh=(32,32),input_channels=3,toGray=False,zip_file=None):

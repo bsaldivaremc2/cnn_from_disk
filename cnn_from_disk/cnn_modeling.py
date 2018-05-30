@@ -4,8 +4,12 @@ import pandas as pd
 import os
 import sys
 from .tf_layers import *
+from .proc_utils import send_mail
 
 def create_model(ixs,iys,model=None,opt_mode='classification'):    
+    """
+    Version 0.106
+    """
     if model==None:
         print("No model specified")
         return 0
@@ -16,12 +20,17 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
     learning_rate = tf.placeholder(tf.float32)
     #Define the model here--DOWN
     x = xi
-    types_dic = {'conv':0,'bn':0,'relu':0,'max_pool':0,'drop_out':0,'fc':0,'res_131':0}
+    layers=['conv','bn','relu','max_pool','drop_out','fc','res_131','conv_t']
+    conv_layers = ['conv','res_131','conv_t']
+    type_layers = ['fc']
+    type_layers.extend(conv_layers)
+
+    types_dic = {}
+    for l in layers:
+        types_dic[l]=0
     last_type = None
     for i,_ in enumerate(model):
         _type=_[0]
-        if _type in ['conv','res_131','fc']:
-            last_type=_type
         _input=x
         params={'_input':_input}
         #print(_)
@@ -34,6 +43,8 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
         name_scope=_type+str(counter)
         if _type=='conv':    
             x=conv(**params)
+        elif _type=='conv_t':    
+            x=conv_transpose(**params)
         elif _type=='bn':
             params['is_training']=train_bool
             x = batch_norm(**params)
@@ -47,31 +58,33 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
         elif _type=='fc':
             params['prev_conv']=False
             if i>0:
-                if last_type in ['conv','res_131']:
-                #if model[i-1][0]=='conv':
+                if last_type in conv_layers:
                     params['prev_conv']=True
             x = fc(**params)
         elif _type=='res_131':
             params['is_training']=train_bool
             x = res_131(**params)
+        if _type in type_layers:
+            last_type=_type
     prev_conv_fcl = False
-    #if model[-1][0] in ['conv','res_131']:
-    if last_type in ['conv','res_131']:
+    if last_type in conv_layers:
         prev_conv_fcl=True
-    prediction = fc(x,n=class_output,name_scope="FCL",prev_conv=prev_conv_fcl)
+    
+    if opt_mode in ['regression','classification']:
+        prediction = fc(x,n=iys[1],name_scope="FCL",prev_conv=prev_conv_fcl)
+    else:
+        prediction = x
     ##Define the model here--UP
-    #y_CNN = tf.nn.softmax(prediction,name='Softmax')
-    #class_pred = tf.argmax(y_CNN,1,name='ClassPred')
-    #loss = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_CNN), reduction_indices=[1]),name="loss")
     if opt_mode=='classification':
         y_CNN = tf.nn.softmax(prediction,name='Softmax')        
         class_pred = tf.argmax(y_CNN,1,name='ClassPred')       
         loss = tf.reduce_mean(-tf.reduce_sum(y_ * tf.log(y_CNN), reduction_indices=[1]),name="loss")
         acc_,spe_,sen_,tp_,tn_,fp_,fn_ = stats_class(y_CNN,y_)
         stats_dic={'acc':acc_,'spe':spe_,'sen_':sen_,'tp':tp_,'tn':tn_,'fp':fp_,'fn':fn_}
-    elif (opt_mode=='regression') or (opt_mode=='yolo'):
+    elif opt_mode in ['regression','yolo','segmentation']:
         loss = tf.reduce_mean(tf.pow(tf.subtract(y_,prediction),2),name='loss')
         stats_dic={'loss':loss}
+    
     #The following three lines are required to make "is_training" work for normalization
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
@@ -80,11 +93,16 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
 
 
 
+
+
+
+
 def train_model(batch_func,batch_func_params,model=None,iters=10,lr=0.001,
           save_model=True,save_name=None,
           restore_model=False,restore_name=None,
-          v=False,opt_mode='classification'):
+          v=False,opt_mode='classification',log=False,log_file=None):
     """
+    Version 0.104
     The train is done using a function to return the x and y values for each batch processing.
     *batch_func: is the function that will output the x and y values that will be loaded each mini-batch
     *batch_func_params: is a dictionary that contains the params for the batch_func, at least if should have
@@ -93,6 +111,7 @@ def train_model(batch_func,batch_func_params,model=None,iters=10,lr=0.001,
         * batch_size: the size for the mini_batch
         * offset: this value is used to use the next mini_match starting in the position "offset"
     * model: is a list of lists that defines the model that will be created
+    * log: Specify if a log of the training process will be appended to log_file, log_file must exist
     """
     # Define parameters to 
     base_run_params = dict(batch_func_params)
@@ -134,8 +153,15 @@ def train_model(batch_func,batch_func_params,model=None,iters=10,lr=0.001,
                 fd.update(fdt)
                     
                 _t,l= s.run([train_step,loss],feed_dict=fd)
+
+                output_string = "'Iter':"+str(_)+",'batch':"+str(batch)+",'batches':"+str(batches)+",'Loss':"+str(l);
+
                 if v==True:
-                    print("Iter:",_,"batch",batch,"batches",batches,"Loss:",l)
+                    print(output_string)
+                if (log==True) and (os.path.isfile(log_file)):
+                    with open(log_file,"a") as _f:
+                        _f.write(output_string+"\n")
+
             
         if save_model==True:
             if type(save_name)!=type(None):
@@ -269,3 +295,43 @@ def stats_class(predicted,ground_truth):
     specificity = tf.divide(tn,(tn+fp),name='spe')#specificity = tn/(tn+fp)
     accuracy = tf.divide((tn+tp),(tn+tp+fn+fp),name='acc')#accuracy = (tn+tp)/(tn+tp+fn+fp)
     return [accuracy,specificity,sensitivity,tp,tn,fp,fn]
+
+def train_model_with_checkpoints(train_model_args,total_iters,iters,model_name_base,learning_rates={0:0.01},
+                                send_email_per_loop_args=None,send_email_end_args=None):
+    """
+    *total iters: total number of iterations, it is different from *iters* in that 
+     after each iters number is reached, the training is stopped, a model is saved, 
+     then the saved model is restored and iters are computed until the sum of iters equals total_iters.
+    *learning_rates: is a dictionary that each key represent the number of epoch and the learning associated
+     to it. if lr={0:0.01,16:0.001}, when the epoch is 16 the learning rate will change from 0.01 to 0.001.
+    *model_name_base: is the prefix for the model name file where the model will be saved, e.g. Model01/model_saved_
+    *send_email_per_loop_args: is a dictionary that contains the parameters to be send in an email after each model is saved.
+    *send_email_end_args: is a dictionary that contains the parameteres to be send in an email after all the iterations are completed.
+     type help(send_mail) for information about its parameters
+    
+    """
+    repetitions = total_iters // iters
+    lr = learning_rates[0]
+    for _ in range(repetitions):
+        if _ ==0:
+            restore_model=False
+        else:
+            restore_model=True
+        restore_iter = (_)*iters
+        save_iter = (_+1)*iters
+        restore_name = model_name_base+str(restore_iter)+'_.ckpt'
+        save_name = model_name_base+str(save_iter)+'_.ckpt'
+        if restore_iter in learning_rates.keys():
+            lr=learning_rates[restore_iter]
+        print("Repetition:",_+1,"Total:",repetitions)
+        train_model_args['iters']=iters
+        train_model_args['lr']=lr
+        train_model_args['save_name']=save_name
+        train_model_args['restore_name']=restore_name
+        train_model_args['restore_model']=restore_model
+        train_model(**train_model_args)
+        if type(send_email_per_loop_args)!=type(None):
+            send_mail(**send_email_per_loop_args)
+    if type(send_email_end_args)!=type(None):
+        send_mail(**send_email_end_args)
+

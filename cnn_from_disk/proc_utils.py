@@ -5,6 +5,7 @@ import numpy as np
 import os
 import sys
 import zipfile
+import smtplib
 
 
 def img_nump_from_file(imgF,w_h = (32,32),resize=True,reshape_batch=True):
@@ -24,8 +25,23 @@ def img_nump_from_file(imgF,w_h = (32,32),resize=True,reshape_batch=True):
         imnp = imnp.reshape(1,nis[0],nis[1],nis[2])
     return imnp.copy()
 
-y_func = lambda y: np.vstack(y.values)
-
+def img_nump_from_file_proportion(imgF,w_h = (32,32),resize=True,reshape_batch=True):
+    """
+    Open Image from file and resize it if specified
+    """
+    img=Image.open(imgF)
+    if resize==True:
+        ims = img.size
+        xf = w_h[0]/ims[0]
+        yf = w_h[1]/ims[1]
+        img = img.resize(w_h,Image.ANTIALIAS)
+    imnp=np.asarray(img)
+    img.close() #Close opened image
+    nis = imnp.shape
+    if reshape_batch==True:
+        nisx = list(nis)
+        imnp = imnp.reshape(1,nis[0],nis[1],nis[2])
+    return imnp.copy(),[xf,yf]
 
 def string_to_list(y):
     output = y.replace("[","").replace("]","").replace("\n","").strip().split(" ")
@@ -34,6 +50,10 @@ def string_to_list(y):
             output.remove(val)
     output = list(map(lambda x: int(x),output))
     return output
+
+def multiply_y(y,yf):
+    yf = np.hstack([yf for _ in range(y.shape[1]//2)])
+    return y*yf
 
 def pass_y (y):
     return y
@@ -131,3 +151,57 @@ def split_train_test(idf,train_test_proportion=0.8,shuffle=False):
     train_df = ttdf.head(train_split)
     test_df = ttdf.tail(test_split)
     return train_df,test_df
+
+def json_to_points(iJson):
+    tdf = pd.read_json(iJson).transpose()
+    output_dic = {}
+    for image_file in range(tdf.shape[0]):
+        image_name = tdf['filename'][image_file]
+        points_df = tdf['regions'][image_file]
+        points = []
+        for k in points_df.keys():
+            dic_xy_points = points_df[k]['shape_attributes']
+            points.append([dic_xy_points['cx'],dic_xy_points['cy']])
+        output_dic[image_name] = np.asarray(points)
+    return output_dic.copy()
+
+def get_image_from_zip(ifile,izip,resize=None):
+    with zipfile.ZipFile(izip) as tz:
+        with tz.open(ifile) as f:
+            return get_np_image(f,resize)
+
+
+def get_np_image(ifile,resize=None):
+    _imgx = Image.open(ifile)
+    if type(resize)!=type(None):
+        _imgx = _imgx.resize((resize[0],resize[1]),Image.ANTIALIAS)
+    _img_np = np.asarray(_imgx)
+    _imgx.close()
+    return _img_np.copy()
+
+
+def get_image_shape(ifile):
+    _imgx = Image.open(ifile)
+    _img_np = np.asarray(_imgx)
+    _imgx.close()
+    return _img_np.shape
+
+
+def yolo_target_binary_from_zip(idf,izipfile=None,index=0,filename_col='filename',points_col='points',
+                                reshape_target=(48,64)):
+    img_file_0 = idf['filename'][index]
+    if type(izipfile)!=type(None):
+        with zipfile.ZipFile(izipfile) as tz:
+            with tz.open(img_file_0) as f:
+                ims = get_image_shape(f)
+    else:
+        ims = get_image_shape(img_file_0)
+    xf,yf = 1.0*reshape_target[1]/ims[1],1.0*reshape_target[0]/ims[0]
+    test_points = idf[points_col][index]
+    npz = np.zeros((
+        reshape_target[0],reshape_target[1]
+    ))
+    for _ in range(test_points.shape[0]):
+        x,y = test_points[_,:]
+        npz[int(np.floor(y*yf)),int(np.floor(x*xf))]=1
+    return npz.reshape([1,npz.shape[0]*npz.shape[1]]).copy()
