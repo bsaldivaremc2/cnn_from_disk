@@ -14,6 +14,21 @@ def conv(_input,filter_size=3,layer_depth=8,strides=[1,1,1,1],padding='SAME',
         b = tf.Variable(tf.constant(stddev_n, shape=[layer_depth]),name='b')
         c = tf.add(tf.nn.conv2d(_input, W, strides=strides, padding=padding),b,name='conv')
     return c
+def conv_transpose(_input,output_shape,filter_size=3,layer_depth=8,strides=[1,1,1,1],padding='SAME',
+              name_scope="CLT",stddev_n = 0.05):
+    """
+    Upsampling process suggested by: https://towardsdatascience.com/autoencoders-introduction-and-implementation-3f40483b0a85
+    Better resize up then apply a convolution
+    """
+    with tf.name_scope(name_scope):
+        _input = tf.image.resize_images(images=_input,size=output_shape,method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+        ims = _input.get_shape().as_list()
+        input_depth=ims[len(ims)-1]
+        W = tf.Variable(tf.truncated_normal([filter_size,filter_size,input_depth,layer_depth], stddev=stddev_n),name='W')
+        b = tf.Variable(tf.constant(stddev_n, shape=[layer_depth]),name='b')
+        c = tf.add(tf.nn.conv2d(_input, W, strides=strides, padding=padding),b,name='conv')
+    return c
+
 def batch_norm(_input,is_training=True,decay=0.5,name_scope='BN'):
     with tf.name_scope(name_scope):
         o = tf.contrib.layers.batch_norm(_input, center=True, scale=True, is_training=is_training,decay=decay)
