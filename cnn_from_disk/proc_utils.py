@@ -7,6 +7,40 @@ import sys
 import zipfile
 import smtplib
 
+def img_nump_from_file_only_proportion(imgF,w_h = (32,32),resize=True,reshape_batch=True,repeat=8):
+    """
+    Open Image from file and resize it if specified but return only the proportion of resizing instead
+    of the image
+    """
+    img=Image.open(imgF)
+    if resize==True:
+        ims = img.size
+        xf = w_h[0]/ims[0]
+        yf = w_h[1]/ims[1]
+        img = img.resize(w_h,Image.ANTIALIAS)
+    imnp=np.asarray(img)
+    img.close() #Close opened image
+    nis = imnp.shape
+    if reshape_batch==True:
+        nisx = list(nis)
+        imnp = imnp.reshape(1,nis[0],nis[1],nis[2])
+    return np.hstack([[xf,yf] for _ in range(repeat)])
+
+def get_center(np_array):
+    """
+    The input is a numpy array of shape [x0,y0,x1,y1,...xn,yn] 
+    This function will get all the xs and ys and get the mean 
+    of each one returning a pair (x.mean,y.mean)
+    """
+    _p = np_array.flatten()
+    pairs  = _p.shape[0]//2
+    points = pd.DataFrame(_p)
+    xs = points.iloc[[ x for x in range(pairs)]]
+    ys = points.iloc[[ x*2+1 for x in range(pairs)]]
+    return [xs.mean(),ys.mean()]
+
+
+
 
 def img_nump_from_file(imgF,w_h = (32,32),resize=True,reshape_batch=True):
     """
@@ -54,6 +88,17 @@ def string_to_list(y):
 def multiply_y(y,yf):
     yf = np.hstack([yf for _ in range(y.shape[1]//2)])
     return y*yf
+
+def multiply_y_repeat(y,yf,repeat=1):
+    op = []
+    xf,yf = yf[:,0],yf[:,1]
+    for _ in [xf,yf]:
+        _ = _.reshape(_.shape[0],1)
+        for __ in range(repeat):
+            op.append(_)
+    f = np.hstack(op)
+    return y*f
+
 
 def pass_y (y):
     return y
@@ -205,3 +250,83 @@ def yolo_target_binary_from_zip(idf,izipfile=None,index=0,filename_col='filename
         x,y = test_points[_,:]
         npz[int(np.floor(y*yf)),int(np.floor(x*xf))]=1
     return npz.reshape([1,npz.shape[0]*npz.shape[1]]).copy()
+
+
+def del_key(dic,key):
+    try:
+        del dic[key]
+    except KeyError:
+        pass
+
+
+def mean_overlap(boxes_list,overlap_th=0.2):
+    """
+    Given a list of boxes, find those that overlap more than the 
+    *overlap_th* value (0.2 is 20%) and keep a box that is the mean 
+    of those boxes' coordinates.
+    A boxes_list's box has the format:
+     [x0,x1,y0,y1] standing for the box coordinates:
+      x0,y0; x1,y0; x1,y1; x0,y1
+    
+    """
+    box_overlap={}
+    boxes = []
+    for _ in range(0,len(boxes_list)):
+        box_a = boxes_list[_]
+        box_overlap[_]=[np.asarray(box_a)]
+        for __ in range(0,len(boxes_list)):
+            box_b = boxes_list[__]
+            if _!=__:
+                x_intersect = max(0,min(box_a[1],box_b[1])-max(box_a[0],box_b[0]))/(box_a[1]-box_a[0])
+                y_intersect = max(0,min(box_a[3],box_b[3])-max(box_a[2],box_b[2]))/(box_a[3]-box_a[2])
+                xy_intersect = x_intersect*y_intersect
+                if (xy_intersect>overlap_th):
+                    box_overlap[_].append(np.asarray(box_b))    
+        boxes.append(np.mean(np.vstack(box_overlap[_]),0).astype(int))
+    return boxes
+
+
+def clear_directory(folder):
+    """
+    Remove all files from a directory
+    Reference: https://stackoverflow.com/questions/185936/how-to-delete-the-contents-of-a-folder-in-python
+    """
+    import os, shutil
+    for the_file in os.listdir(folder):
+        file_path = os.path.join(folder, the_file)
+        try:
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+            #elif os.path.isdir(file_path): shutil.rmtree(file_path)
+        except Exception as e:
+            print(e)
+
+
+def get_window(ilist):
+    """
+    The input is a numpy array of shape [x0,y0,x1,y1,...xn,yn] 
+    This function will get all the xs and ys and get the middle point
+    of each one returning a pair (x,y)
+    """
+    _l = len(ilist)
+    xs = ilist[:_l//2]
+    ys = ilist[_l//2:]
+    
+    _x = max(xs)-min(xs)
+    _y = max(ys)-min(ys)
+    return [_x,_y]
+
+def get_center(ilist):
+    """
+    The input is a numpy array of shape [x0,y0,x1,y1,...xn,yn] 
+    This function will get all the xs and ys and get the middle point
+    of each one returning a pair (x,y)
+    """
+    _l = len(ilist)
+    xs = ilist[:_l//2]
+    ys = ilist[_l//2:]
+    
+    _x = (max(xs)+min(xs))//2
+    _y = (max(ys)+min(ys))//2
+    return [_x,_y]
+

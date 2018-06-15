@@ -107,7 +107,8 @@ def point_in_limits(points,limsx,limsy,final='or'):
 
 def extract_all_but_box_and_save(idf,row,file_col,center_points_col,
                          show=False,save_directory=None,box_wh=(30,30),resize_img=None,
-                        v=False,strides=(30,30),augmentation=True):
+                        v=False,strides=(30,30),augmentation=True,
+                                 window_from_col=False,window_col='window'):
     """
     Purpose: Given a dataframe load an image and extract windows of size box_wh. 
         The windows that are being created won't be inside the ranges of a  
@@ -136,9 +137,12 @@ def extract_all_but_box_and_save(idf,row,file_col,center_points_col,
     timg = get_np_image(file_name,resize=resize_img)
     points = test_row[center_points_col]
     w,h = box_wh
-    
+    if window_from_col==True:
+        w,h = test_row[window_col]
+    #
+    w,h=int(w),int(h)
     ylim,xlim = timg.shape[0],timg.shape[1]
-    
+    #
     limsx, limsy = [],[]
     if v==True:
         print("Calculating points")    
@@ -190,25 +194,28 @@ def extract_all_but_box_and_save(idf,row,file_col,center_points_col,
                                     print("Saved:",save_name)
                                 samplex+=1
 
+
+
 def extract_box_and_save(idf,row,file_col,center_points_col,
                          show=False,save_directory=None,box_wh=(30,30),resize_img=None,
-                        v=False,augmentation=True):
+                        v=False,augmentation=True,window_from_col=False,window_col='window'):
     """
     Extract a window of shape *box_wh* given the center defined in the column *center_points_col*. 
     If *augmentation*=True then the window extracted will be rotated three times 90° and with a horizontal reflection
     creating 6 more elements.
     *resize_img* can be set to a two elements list/tuple of width and height to resize the original image before extracting the window
     """
-
     test_row = idf.iloc[row]
     file_name = test_row[file_col]
     image_name = file_name.split('/')[-1]
-    
+    ####
     timg = get_np_image(file_name,resize=resize_img)
     points = test_row[center_points_col]
     w,h = box_wh
+    if window_from_col==True:
+        w,h = test_row[window_col]
     ylim,xlim = timg.shape[0],timg.shape[1]
-    
+    ####
     for i,point in enumerate(points):
         cx,cy = point[0],point[1]
         sx,sy = int(max(0,cx-w/2)),int(max(0,cy-h/2))
@@ -223,7 +230,7 @@ def extract_box_and_save(idf,row,file_col,center_points_col,
             output_format = image_name.split('.')[-1]
             pre_save_name = save_directory+image_name+'_box_'+str(i)+'_'+str(w)+"x"+str(h)+"_"
             save_name = pre_save_name+"."+output_format
-            
+            ######
             pil_img = Image.fromarray(img_box)
             pil_img.save(save_name)
             if v==True:
@@ -236,7 +243,7 @@ def extract_box_and_save(idf,row,file_col,center_points_col,
                     save_name = pre_save_name+str(samplex)+'_.'+output_format
                     pil_img.save(save_name)
                     if v==True:
-                        print("Saved:",save_name)
+                        print("Saved_:",save_name)
                     samplex+=1
                     t_img_box_2 = np.flipud(t_img_box)                                
                     pil_img = Image.fromarray(t_img_box_2)
@@ -245,4 +252,6 @@ def extract_box_and_save(idf,row,file_col,center_points_col,
                     if v==True:
                         print("Saved:",save_name)
                     samplex+=1
+
+
 

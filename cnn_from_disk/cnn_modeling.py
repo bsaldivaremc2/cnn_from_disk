@@ -4,11 +4,11 @@ import pandas as pd
 import os
 import sys
 from .tf_layers import *
-from .proc_utils import send_mail
+from .proc_utils import *
 
 def create_model(ixs,iys,model=None,opt_mode='classification'):    
     """
-    Version 0.106
+    Version 0.107
     """
     if model==None:
         print("No model specified")
@@ -24,7 +24,6 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
     conv_layers = ['conv','res_131','conv_t']
     type_layers = ['fc']
     type_layers.extend(conv_layers)
-
     types_dic = {}
     for l in layers:
         types_dic[l]=0
@@ -69,11 +68,12 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
     prev_conv_fcl = False
     if last_type in conv_layers:
         prev_conv_fcl=True
-    
     if opt_mode in ['regression','classification']:
         prediction = fc(x,n=iys[1],name_scope="FCL",prev_conv=prev_conv_fcl)
     else:
         prediction = x
+    with tf.name_scope('output'):
+        prediction = tf.identity(prediction, name="output")
     ##Define the model here--UP
     if opt_mode=='classification':
         y_CNN = tf.nn.softmax(prediction,name='Softmax')        
@@ -84,7 +84,6 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
     elif opt_mode in ['regression','yolo','segmentation']:
         loss = tf.reduce_mean(tf.pow(tf.subtract(y_,prediction),2),name='loss')
         stats_dic={'loss':loss}
-    
     #The following three lines are required to make "is_training" work for normalization
     update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
     with tf.control_dependencies(update_ops):
@@ -242,7 +241,9 @@ def test_model(batch_func,batch_func_params,model_name=None,opt_mode='regression
                     batch_output.append(output)
     return batch_output 
 
-def infer_model(batch_func,batch_func_params,model_name=None,opt_mode='classification',v=False):
+
+
+def infer_model(batch_func,batch_func_params,model_name=None,v=False):
     """
     Function to make an inference based on the trained model
     *batch_func: is the function that will output the x and y values that will be loaded each mini-batch
@@ -264,8 +265,6 @@ def infer_model(batch_func,batch_func_params,model_name=None,opt_mode='classific
                 batch_size = batch_func_params['batch_size']
                 batches = int(np.ceil(rows/batch_size))
                 fd={'train_test:0':False}
-                predict_params_d = {'classification':['Softmax:0','ClassPred:0'],'regression':'FCL/FC:0','yolo':'FCL/FC:0'}
-                predict_params = predict_params_d[opt_mode]
                 output = []
                 #########
                 for batch in range(0,batches):
@@ -273,7 +272,43 @@ def infer_model(batch_func,batch_func_params,model_name=None,opt_mode='classific
                     ix = batch_func(**batch_func_params)
                     fdt={'x:0':ix}
                     fd.update(fdt)
-                    fcl = s.run(predict_params,feed_dict=fd)
+                    fcl = s.run('output/output:0',feed_dict=fd)
+                    output.append(fcl)
+                    if v==True:
+                        print(fcl)
+        return output
+
+    
+def layer_output(batch_func,batch_func_params,model_name=None,layer_name='FCL/FC:0',v=False):
+    """
+    Function to return the output of a layer
+    *batch_func: is the function that will output the x and y values that will be loaded each mini-batch
+    *batch_func_params: is a dictionary that contains the params for the batch_func, at least if should have
+    the following keys:
+        * idf: the dataframe that specifies the total size of the data
+        * batch_size: the size for the mini_batch
+    """
+    if model_name==None:
+        print("No model to load")
+        return
+    else:
+        with tf.Session('', tf.Graph()) as s:
+            with s.graph.as_default():
+                saver = tf.train.import_meta_graph(model_name+".meta")
+                saver.restore(s,model_name)
+                #Define parameters to load from disk
+                rows = batch_func_params['idf'].shape[0]
+                batch_size = batch_func_params['batch_size']
+                batches = int(np.ceil(rows/batch_size))
+                fd={'train_test:0':False}
+                output = []
+                #########
+                for batch in range(0,batches):
+                    batch_func_params['offset']=batch*batch_size
+                    ix = batch_func(**batch_func_params)
+                    fdt={'x:0':ix}
+                    fd.update(fdt)
+                    fcl = s.run(layer_name,feed_dict=fd)
                     output.append(fcl)
                     if v==True:
                         print(fcl)
@@ -335,3 +370,193 @@ def train_model_with_checkpoints(train_model_args,total_iters,iters,model_name_b
     if type(send_email_end_args)!=type(None):
         send_mail(**send_email_end_args)
 
+
+def train_model_with_checkpoints_unbalanced(train_model_args,total_iters,iters,model_name_base,learning_rates={0:0.01},
+                                send_email_per_loop_args=None,send_email_end_args=None):
+    """
+    Similar to train_model_with_checkpoints but the argument *train_model_args['batch_func_params']* 
+    instead of having a key 'idf' it has 'pos_df' and 'neg_df' representing a dataframe with the positive
+    and negative x and y values respectively.
+    In addition, this function will get the number of rows of both dataframes and pick the lowest one.
+    This number is the number of samples that will be drawn from both dataframes, joined and shuffled for
+    each global iteration/checkpoint.
+    
+    *total iters: total number of iterations, it is different from *iters* in that 
+     after each iters number is reached, the training is stopped, a model is saved, 
+     then the saved model is restored and iters are computed until the sum of iters equals total_iters.
+    *learning_rates: is a dictionary that each key represent the number of epoch and the learning associated
+     to it. if lr={0:0.01,16:0.001}, when the epoch is 16 the learning rate will change from 0.01 to 0.001.
+    *model_name_base: is the prefix for the model name file where the model will be saved, e.g. Model01/model_saved_
+    *send_email_per_loop_args: is a dictionary that contains the parameters to be send in an email after each model is saved.
+    *send_email_end_args: is a dictionary that contains the parameteres to be send in an email after all the iterations are completed.
+     type help(send_mail) for information about its parameters
+    
+    """
+    pos_df = train_model_args['batch_func_params']['pos_df']
+    neg_df = train_model_args['batch_func_params']['neg_df']
+    
+    del_key(train_model_args['batch_func_params'],'pos_df')
+    del_key(train_model_args['batch_func_params'],'neg_df')
+    
+    pos_rows = pos_df.shape[0]
+    neg_rows = neg_df.shape[0]
+    sample_rows = min(pos_rows,neg_rows)
+    
+    xcol = train_model_args['batch_func_params']['x_col']
+    ycol = train_model_args['batch_func_params']['y_col']
+    
+    repetitions = total_iters // iters
+    lr = learning_rates[0]
+    for _ in range(repetitions):
+        if _ ==0:
+            restore_model=False
+        else:
+            restore_model=True
+        restore_iter = (_)*iters
+        save_iter = (_+1)*iters
+        restore_name = model_name_base+str(restore_iter)+'_.ckpt'
+        save_name = model_name_base+str(save_iter)+'_.ckpt'
+        if restore_iter in learning_rates.keys():
+            lr=learning_rates[restore_iter]
+        print("Repetition:",_+1,"Total:",repetitions)
+        train_model_args['iters']=iters
+        train_model_args['lr']=lr
+        train_model_args['save_name']=save_name
+        train_model_args['restore_name']=restore_name
+        train_model_args['restore_model']=restore_model
+        # Balance dataframe
+        _pos_df = pos_df.sample(sample_rows).reset_index()[[xcol,ycol]]
+        _neg_df = neg_df.sample(sample_rows).reset_index()[[xcol,ycol]]
+        _tdf = pd.concat([_pos_df,_neg_df])
+        train_model_args['batch_func_params']['idf'] = _tdf.sample(sample_rows*2).reset_index()[[xcol,ycol]]
+        #Start training
+        train_model(**train_model_args)
+        if type(send_email_per_loop_args)!=type(None):
+            send_mail(**send_email_per_loop_args)
+    if type(send_email_end_args)!=type(None):
+        send_mail(**send_email_end_args)
+
+
+
+def list_variables_from_model(model_name):
+    saver = tf.train.import_meta_graph(model_name+'.meta')
+    imported_graph = tf.get_default_graph()
+    graph_op = imported_graph.get_operations()
+    _o = []
+    for i in graph_op:
+        x = i.name
+        _o.append(x)
+    return sorted(set(_o))
+
+
+def find_object_from_image(idf,row,batch_func,batch_func_params,file_col='filename',model_name=None,
+                           prediction_threshold=0.75,
+                           tmp_dir=None,box_wh=(32,32),strides=(32,32),resize_img=None,
+                           return_boxes=False,show_result=False,save_dir=None,v=False,
+                          box_overlap_loops=2,overlap_th=0.2,box_color='red',prediction_mode='default'):
+    """
+    *idf: Dataframe that has in the column *file_col* the location of the file to be predicted.
+    *batch_func is the function that will pre-process the image in order to make it predictable. 
+    see help(batch_pre_proc_from_df) as an example.
+    *batch_func_params is a dictionary that holds the kargs for the *batch_func*
+    *model_name is the location to the model .ckpt that will be used for inference.
+    *prediction_threshold: is the threshold of confidence over which the inference will consider
+    a window as a positive class. The model should output a positive when the first columns is 1.
+    *tmp_dir: a directory where the input image will be split and used for inference.
+    This directory should be empty, because this function will erase all the content when finishing.
+    *box_wh: the width and height of the box for inference. This should match the input shape of the model.
+    *strides: how many pixels will be taken as a step to analyze another window. 
+    *resize_img: If the input image should be resized before taking the windows.
+    *return_boxes: if True, the location of the boxes where a positive sample was found will be returned.
+    *show_result: plot the input image and show the squares that contain a positive sample.
+    *save_dir: If specified used as the directory where to save the input image with the boxes
+     for positive windows.
+    *v: Verbosity, set to True if you want to see the progress
+    *box_overlap_loops: how many times perform mean_overlap function. In case overlapped windows are present
+     repeat overlap reduction. 
+    overlap_th: overlap threshold percentage. See more information with help(mean_overlap)
+    * box_color: specify the color of the box that will be surrounding the positive objects found in the image
+    *prediction_mode: change to "old" if using an old version of the inference function where you need
+    Softmax
+    """
+    if type(tmp_dir)==str:
+        clear_directory(tmp_dir)
+        image_file = idf.iloc[row]['filename'].split('/')[-1]
+        if v==True:
+            print("Spliting image:",image_file)
+        split_image_and_save(idf,row,file_col,show=False,save_directory=tmp_dir,
+                             box_wh=box_wh,resize_img=resize_img,v=v,strides=strides)
+        
+        raw_imgs_predict = []
+        for _ in os.listdir(tmp_dir):
+            if image_file in _:
+                raw_imgs_predict.append({'filename':tmp_dir+_})
+        ## 
+        raw_predict_df = pd.DataFrame(raw_imgs_predict)
+        ### Inference
+        batch_func_params['idf']=raw_predict_df
+        batch_func_params['yfunc']=None
+        if v==True:
+            print("Predicting windows")
+        ### Here use layer_output instead of infer because it was trained using an old version
+        if prediction_mode=='old':
+            predictions = layer_output(batch_func,batch_func_params,model_name=model_name,layer_name='Softmax:0',v=False)
+        else:
+            predictions = infer_model(batch_func,batch_func_params,model_name=model_name,v=False)
+        clear_directory(tmp_dir)
+        predictions = np.vstack(predictions)
+        predictions = predictions.round(2)
+        preds_df = pd.DataFrame(columns=['Positive','Negative'],data=predictions)
+        xy_pos = []
+        for _ in range(0,raw_predict_df.shape[0]):
+            x,y = raw_predict_df.iloc[_].values[0].split('_')[-1].split('.')[0].split('x')
+            xy_pos.append({'x':int(x),'y':int(y)})
+        xy_df = pd.DataFrame(xy_pos)
+        pred_df = pd.concat([preds_df,xy_df],1)
+        pred_output = pred_df[pred_df['Positive']>prediction_threshold]
+        img_file = raw_imgs_df['filename'][row]
+        timg = get_np_image(img_file,resize=resize_img)
+        ############ Overlap of boxes
+        boxes_list = []
+        for _ in range(pred_output.shape[0]):
+            row = pred_output.iloc[_]
+            x0= row['x']
+            y0 = row['y']
+            boxes_list.append([x0,x0+box_wh[0],y0,y0+box_wh[1]])
+        boxes = boxes_list
+        for _ in range(box_overlap_loops):
+            boxes = mean_overlap(boxes,overlap_th=overlap_th)
+        
+        if type(save_dir)==str:
+            if os.path.isdir(save_dir):
+                pil_img = Image.fromarray(timg)
+                from PIL import ImageDraw
+                draw = ImageDraw.Draw(pil_img)
+                for box in boxes:
+                    draw.rectangle(
+                    ((box[0],box[2]),(box[1],box[3])),outline=box_color
+                    )
+                if save_dir[-1]!="/":
+                    save_dir+="/"
+                save_file = save_dir+"prediction_"+image_file+".jpg"
+                if v==True:
+                    print("saving in",save_file)
+                pil_img.save(save_file, "JPEG")
+            else:
+                print("Directory",save_dir,"does not exist")
+        if show_result==True:
+            plt.close()
+            plt.imshow(timg)
+            for _ in range(min(1000,len(boxes))):
+                box = boxes[_]
+                xs,xe,ys,ye = box
+                x_ = [xs,xe,xe,xs,xs]
+                y_ = [ys,ys,ye,ye,ys]
+                xy = np.vstack([x_,y_]).transpose()
+                plt.plot(xy[:,0],xy[:,1],'r--')
+            plt.show()
+        if return_boxes==True:
+            return boxes
+
+    
+    
