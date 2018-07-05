@@ -330,3 +330,23 @@ def get_center(ilist):
     _y = (max(ys)+min(ys))//2
     return [_x,_y]
 
+
+def load_dataset(pos_dir, neg_dir,train_test_split=0.8):
+    datap = []
+    datan = []
+    for _ in os.listdir(pos_dir):
+        if ".jpg" in _:
+            datap.append({'fullpath':pos_dir+"/"+_,'target':np.array([[1,0]])})
+    for _ in os.listdir(neg_dir):
+        if ".jpg" in _:
+            datan.append({'fullpath':neg_dir+"/"+_,'target':np.array([[0,1]])})
+    idfp = pd.DataFrame(datap)
+    idfn = pd.DataFrame(datan)
+    train_pos_df,test_pos_df = split_train_test(idfp,train_test_proportion=train_test_split,shuffle=True)
+    train_neg_df,test_neg_df = split_train_test(idfn,train_test_proportion=train_test_split,shuffle=True)
+    return train_pos_df,test_pos_df,train_neg_df,test_neg_df
+
+def make_dir(idir):
+    if not os.path.exists(idir):
+        os.makedirs(idir)
+

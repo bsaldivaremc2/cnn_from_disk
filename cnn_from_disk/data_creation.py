@@ -255,3 +255,40 @@ def extract_box_and_save(idf,row,file_col,center_points_col,
 
 
 
+
+def extract_negatives(idf,save_dir,parts=16,part=0,strides=(256,256)):
+    si=part
+    s,e=si*idf.shape[0]//parts,(si+1)*idf.shape[0]//parts
+    for row in range(s,e):
+        print(row)
+        extract_all_but_box_and_save(idf,row,file_col='fullpath',center_points_col='center',
+                         show=False,save_directory=save_dir,box_wh=(348,348),resize_img=None,
+                        v=True,strides=strides,augmentation=True,
+                                 window_from_col=True,window_col='window')
+    
+
+
+def extract_positives(idf,save_dir,parts=16,part=0):
+    si=part
+    s,e=si*idf.shape[0]//parts,(si+1)*idf.shape[0]//parts
+    for row in range(s,e):
+        print(row)
+        extract_box_and_save(idf,row,file_col='fullpath',center_points_col='center',
+                         show=False,save_directory=save_dir,box_wh=(80,40),
+                         resize_img=None,
+                        v=True,augmentation=True,
+                        window_from_col=True,window_col='window')
+
+
+def threads_func(ifunc,ifunc_args,threads,ifunc_args_thread_key):
+    import threading
+    for t in range(threads):
+        print(t,"/",threads)
+        ifunc_args[ifunc_args_thread_key]=t
+        try:
+            threading.Thread(target=ifunc,kwargs=ifunc_args).start()
+        except:
+            print( "Error: unable to start thread",t)
+
+
+            
