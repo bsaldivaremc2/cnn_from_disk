@@ -331,7 +331,7 @@ def stats_class(predicted,ground_truth):
     accuracy = tf.divide((tn+tp),(tn+tp+fn+fp),name='acc')#accuracy = (tn+tp)/(tn+tp+fn+fp)
     return [accuracy,specificity,sensitivity,tp,tn,fp,fn]
 
-def train_model_with_checkpoints(train_model_args,total_iters,iters,model_name_base,learning_rates={0:0.01},
+def train_model_with_checkpoints(train_model_args,total_iters,iters,model_name_base,start_iter=0,learning_rates={0:0.01},
                                 send_email_per_loop_args=None,send_email_end_args=None):
     """
     *total iters: total number of iterations, it is different from *iters* in that 
@@ -347,7 +347,7 @@ def train_model_with_checkpoints(train_model_args,total_iters,iters,model_name_b
     """
     repetitions = total_iters // iters
     lr = learning_rates[0]
-    for _ in range(repetitions):
+    for _ in range(start_iter,repetitions):
         if _ ==0:
             restore_model=False
         else:
@@ -371,7 +371,7 @@ def train_model_with_checkpoints(train_model_args,total_iters,iters,model_name_b
         send_mail(**send_email_end_args)
 
 
-def train_model_with_checkpoints_unbalanced(train_model_args,total_iters,iters,model_name_base,learning_rates={0:0.01},
+def train_model_with_checkpoints_unbalanced(train_model_args,total_iters,iters,model_name_base,start_iter=0,learning_rates={0:0.01},
                                 send_email_per_loop_args=None,send_email_end_args=None):
     """
     Similar to train_model_with_checkpoints but the argument *train_model_args['batch_func_params']* 
@@ -407,7 +407,7 @@ def train_model_with_checkpoints_unbalanced(train_model_args,total_iters,iters,m
     
     repetitions = total_iters // iters
     lr = learning_rates[0]
-    for _ in range(repetitions):
+    for _ in range(start_iter,repetitions):
         if _ ==0:
             restore_model=False
         else:
@@ -559,4 +559,259 @@ def find_object_from_image(idf,row,batch_func,batch_func_params,file_col='filena
             return boxes
 
     
+def find_max_object_from_image(idf,row,batch_func,batch_func_params,file_col='filename',model_name=None,
+                           tmp_dir=None,box_wh=(32,32),strides=(32,32),resize_img=None,
+                           v=False,prediction_mode='default',prediction_threshold=0.75,
+                               reduce_overlap=True,overlap_th=0.2,overlap_method='join',
+                                return_only_max=True,reduce_overlap_repetitions=1):
+    """
+    ==Description==
+    *overlap_method* : join or mean
     
+    """
+    if type(tmp_dir)==str:
+        clear_directory(tmp_dir)
+        image_file = idf.iloc[row]['filename'].split('/')[-1]
+        if v==True:
+            print("Spliting image:",image_file)
+        #Tmp zone:
+        split_image_and_save(idf,row,file_col,show=False,save_directory=tmp_dir,box_wh=box_wh,resize_img=resize_img,v=v,strides=strides)
+        #Get images
+        raw_imgs_predict = []
+        for _ in os.listdir(tmp_dir):
+            if image_file in _:
+                raw_imgs_predict.append({'filename':tmp_dir+_})
+        ## 
+        raw_predict_df = pd.DataFrame(raw_imgs_predict)
+        ### Inference
+        batch_func_params['idf']=raw_predict_df
+        batch_func_params['yfunc']=None
+        if v==True:
+            print("Predicting windows")
+        ### Here use layer_output instead of infer because it was trained using an old version
+        if prediction_mode=='old':
+            predictions = layer_output(batch_func,batch_func_params,model_name=model_name,layer_name='Softmax:0',v=False)
+        else:
+            predictions = infer_model(batch_func,batch_func_params,model_name=model_name,v=False)
+        clear_directory(tmp_dir)
+        predictions = np.vstack(predictions)
+        predictions = predictions.round(2)
+        preds_df = pd.DataFrame(columns=['Positive','Negative'],data=predictions)
+        xy_pos = []
+        for _ in range(0,raw_predict_df.shape[0]):
+            x,y = raw_predict_df.iloc[_].values[0].split('_')[-1].split('.')[0].split('x')
+            xy_pos.append({'x':int(x),'y':int(y)})
+        xy_df = pd.DataFrame(xy_pos)
+        pred_df = pd.concat([preds_df,xy_df],1)
+        pred_df = pred_df[pred_df['Positive']>prediction_threshold].reset_index()[['Positive','x','y']]
+        print("size of values above threshold",pred_df.shape[0],"threshold:",prediction_threshold)
+        pred_df['x1']=pred_df['x']+box_wh[0]
+        pred_df['y1']=pred_df['y']+box_wh[1]
+        #Initialize box string
+        box_cols = ['x','x1','y','y1']
+        box_col_name='box'
+        score_col="Positive"
+        
+        pred_df = box_from_coords(idfx=pred_df,box_cols=box_cols,box_col_name=box_col_name)
+        rdf = pred_df
+        if reduce_overlap==True:
+            rdf = reduce_overlap_df(idf=rdf,box_col=box_col_name,box_cols=box_cols,
+                      overlap_th=overlap_th,overlap_method=overlap_method,score_col=score_col)
+        if type(rdf)==pd.DataFrame:
+            if return_only_max==True:
+                print("One only")
+                rdf = rdf.sort_values(by='Positive',ascending=False).head(1)
+            return rdf.copy()
+        else:
+            return rdf
+
+
+def reduce_overlap_df(idf,box_col="box",box_cols=['x','x1','y','y1'],
+                      overlap_th=0.2,overlap_method='join',score_col="Positive"):
+    xc,xc1,yc,yc1=box_cols
+    odf = []
+    rdf = [] # Initialize dataframe as list for overlapping boxes
+    overlap_list = []
+    box_num = idf.shape[0]    
+    if box_num > 0:
+        overlap_list = overlap_df(idf,box_col=box_col,overlap_th=overlap_th)        
+        ### Box overlap methods here:
+        if len(overlap_list)>0:
+            for l in overlap_list:
+                wdf = idf.loc[l,:]
+                score = np.round(wdf[score_col].mean(),4)
+                if overlap_method=='mean':
+                    #Method mean
+                    xmin,xmax,ymin,ymax = wdf[xc].mean(),wdf[xc1].mean(),wdf[yc].mean(),wdf[yc1].mean()
+                elif overlap_method=='min':
+                    #Method mean
+                    xmin,xmax,ymin,ymax = wdf[xc].min(),wdf[xc1].min(),wdf[yc].min(),wdf[yc1].min()
+                elif overlap_method=='max':
+                    #Method mean
+                    xmin,xmax,ymin,ymax = wdf[xc].max(),wdf[xc1].max(),wdf[yc].max(),wdf[yc1].max()
+                else:
+                    #Method join
+                    xmin,xmax,ymin,ymax = wdf[xc].min(),wdf[xc1].max(),wdf[yc].min(),wdf[yc1].max()    
+                odf.append({xc:xmin,xc1:xmax,yc:ymin,yc1:ymax,score_col:score})
+            rdf = pd.DataFrame(odf)                
+            #get the rows that are not overlapping
+            import itertools
+            overlap_rows = list(itertools.chain.from_iterable(overlap_list))
+            no_overlap_rows = idf.index.difference(pd.Index(overlap_rows))
+            no_ov_df = idf.loc[no_overlap_rows,:]
+        if type(rdf)==pd.DataFrame:
+            if no_ov_df.shape[0]>0:
+                rdf = pd.concat([rdf,no_ov_df],0,ignore_index=True)
+        else:
+            rdf = idf
+    return rdf.copy()
+
+
+
+def box_from_coords(idfx,box_cols=['x','x1','y','y1'],box_col_name='box'):
+    idf = idfx.copy()
+    xc,xc1,yc,yc1=box_cols
+    idf[box_col_name]=idf[xc].astype(str)
+    for l in [xc1,yc,yc1]:
+        idf[box_col_name]+=" "+idf[l].astype(str)
+    #Box str to ints        
+    idf[box_col_name] = idf[box_col_name].apply(lambda x: [ int(s.split(".")[0]) for s in x.strip().split(' ')])
+    return idf.copy()
+
+
+
+
+def overlap_box(box1,box2,overlap_th=0.25):
+    """
+    Returns True if two boxes overlap over a *overlap_th* value. 0.2  = 20%
+    """
+    overlap=False
+    #x_intersect = max(0,min(box1[1],box2[1])-max(box1[0],box2[0]))/(box1[1]-box1[0])
+    #y_intersect = max(0,min(box1[3],box2[3])-max(box1[2],box2[2]))/(box1[3]-box1[2])
+    x_intersect = max(0,min(box1[1],box2[1])-max(box1[0],box2[0]))/min((box1[1]-box1[0]),(box2[1]-box2[0]))
+    y_intersect = max(0,min(box1[3],box2[3])-max(box1[2],box2[2]))/min((box1[3]-box1[2]),(box2[3]-box2[2]))
+    xy_intersect = x_intersect*y_intersect
+    if (xy_intersect>overlap_th):
+        overlap=True
+    return overlap
+
+
+def overlap_df(idf,box_col="box",overlap_th=0.2):
+    """
+    Returns a list of lists that contain the ids (index) of the boxes of the dataframe that overlaps
+    over the *overlap_th* percentage. *overlap_th* value (0.2 is 20%)
+    The box column should be specified in *box_col*.  
+    A box has the format:
+        [x0,x1,y0,y1] standing for the box coordinates:x0,y0; x1,y0; x1,y1; x0,y1
+    
+    """
+    overlap_list = []
+    df_index = idf.index
+    for _ in df_index :
+        rowa = idf.loc[_]
+        overlap_boxes = []
+        for __ in df_index:
+            if _!=__:
+                rowb = idf.loc[__]
+                box_a = rowa[box_col]
+                box_b = rowb[box_col]
+                if overlap_box(box_a,box_b,overlap_th):
+                    overlap_boxes.append(__)
+        if len(overlap_boxes)>0:
+            overlap_boxes.append(_)
+        overlap_boxes = sorted(overlap_boxes)
+        if len(overlap_boxes)>0:
+            overlap_list.append(tuple(overlap_boxes))
+    overlap_list = list(set(overlap_list))
+    return overlap_list[:]
+
+
+def cascade_max_object(find_max_args,image_proportions=[4,5,6,7,8],prediction_threshold=0.75,
+                      return_boxes=False,save_dir=None,v=False,scales_reduce_overlap=True,
+                       scales_overlap_method="join",scales_overlap_th=0.2,scales_reduce_overlap_rep=2,
+                          box_color='red',text_color=(255,255,0),output_proportion=8,max_per_scale=False,
+                      box_cols = ['x','x1','y','y1'], box_col_name='box',score_col="Positive"):
+    tdfs = []
+    max_evaluation=pd.DataFrame()
+    model_window_shape = find_max_args['box_wh']
+    #
+    for proportion in image_proportions:
+        if v==True:
+            print("Evaluating proportion",proportion)    
+        xp = model_window_shape[0]*proportion
+        yp = model_window_shape[1]*proportion
+        find_max_args['resize_img']=[xp,yp]
+        print(find_max_args['resize_img'])
+        #Predict maximun object
+        tdf = find_max_object_from_image(**find_max_args)
+        if type(tdf)==pd.DataFrame:
+            tdf['proportion']=proportion
+            tdfs.append(tdf.copy())
+    #Merging boxes and proportions
+    xc,xc1,yc,yc1=box_cols
+    if len(tdfs)>0:
+        tdf = pd.concat(tdfs,0,ignore_index=True).dropna(0,how='all')
+        tdf['factor']=tdf['proportion'].apply(lambda x: output_proportion/x)
+        for c in box_cols:
+            tdf[c] = tdf[c]*tdf['factor']
+            tdf[c] = tdf[c].astype(int)
+        if scales_reduce_overlap==True:
+            #print("Scales reduce overlap ON")
+            #print("tdf before overlap reduction\n",tdf)
+            for _ in range(scales_reduce_overlap_rep):
+                tdf = box_from_coords(idfx=tdf,box_cols=box_cols,box_col_name=box_col_name)
+                tdf = reduce_overlap_df(idf=tdf,box_col=box_col_name,box_cols=box_cols,
+                      overlap_th=scales_overlap_th,
+                        overlap_method=scales_overlap_method,score_col=score_col)
+            #print("tdf after overlap reduction\n",tdf)
+        max_evaluation = tdf.sort_values(by='Positive',ascending=False).dropna(0,how='all')
+    #Save option
+    if type(save_dir)==str:
+        if os.path.isdir(save_dir):
+            idf = find_max_args['idf']
+            row = find_max_args['row']
+            file_col = find_max_args['file_col']
+            full_img_name = idf.iloc[row][file_col]
+            image_file = full_img_name.split('/')[-1]
+            # Get output proportion
+            ox = model_window_shape[0]*output_proportion
+            oy = model_window_shape[1]*output_proportion
+            #Open image
+            pil_img = Image.open(full_img_name)
+            pil_img = pil_img.resize((ox,oy),Image.ANTIALIAS)           
+            from PIL import ImageDraw
+            from PIL import ImageFont
+            draw = ImageDraw.Draw(pil_img)
+            #Search the maximum box per scale
+            limit=1
+            if max_evaluation.shape[0]>0:
+                if max_per_scale==True:
+                    limit=max_evaluation.shape[0]
+                for _ in range(limit):
+                    row_df = max_evaluation.iloc[_]
+                    score=str(row_df['Positive'])[:6]
+                    x0,x1,y0,y1=row_df[xc],row_df[xc1],row_df[yc],row_df[yc1]
+                    #Draw box
+                    draw.rectangle(
+                        ((x0,y0),(x1,y1)),outline=box_color
+                    )
+                    #Write score
+                    draw.text((x0,y0), str(score), fill=text_color)    
+                #End of boxes
+            if save_dir[-1]!="/":
+                save_dir+="/"
+            save_file = save_dir+"prediction_"+image_file+".jpg"
+            if v==True:
+                print("saving in",save_file)
+            pil_img.save(save_file, "JPEG")
+        else:
+            print("Directory",save_dir,"does not exist")
+    if return_boxes==True:
+        return max_evaluation.copy()
+
+
+def make_dir(idir):
+    if not os.path.exists(idir):
+        os.makedirs(idir)
+
+
