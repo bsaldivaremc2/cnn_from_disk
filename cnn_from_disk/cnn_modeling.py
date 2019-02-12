@@ -41,7 +41,8 @@ def create_model(ixs,iys,model=None,opt_mode='classification'):
         types_dic[_type]+=1
         name_scope=_type+str(counter)
         #new line
-        params['name_scope']=name_scope
+        if 'name_scope' not in params.keys():
+            params['name_scope']=name_scope
         if _type=='conv':    
             x=conv(**params)
         elif _type=='conv_t':    
