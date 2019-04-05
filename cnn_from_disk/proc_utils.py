@@ -350,3 +350,87 @@ def make_dir(idir):
     if not os.path.exists(idir):
         os.makedirs(idir)
 
+
+def bryan_image_generation(file_name,resample_margin=0.2,output_wh = [256,256],
+                           flip_h_prob=0.5,flip_v_prob=0.5,add_noise_prob = 0.5,mult_noise_prob = 0.5,add_shift_prob = 0.5,mult_shift_prob = 0.5,
+                            add_noise_std = 16,mult_noise_var = 0.25, shift_add_max = 30, shift_mult_var = 0.125,norm=True,reshape_batch=True
+                          ):
+  """
+  Given an Image file name location, load an image at which apply noise addition, multiplication, 
+  color shift addition and multiplication, resampling a piece of the image with a margin *resample_margin*, 
+  if norm=True, the image will be divided by 255
+  if reshape_batch=True then the ouput will be a numpy array of dimmensions [1,w,h,channels]
+  """
+  
+  def correct_limits(iinp):
+    inp = iinp.copy()
+    inp[inp<0]=0
+    inp[inp>255]=255
+    return inp.copy()
+  import numpy as np
+  from PIL import Image
+  #For sampling
+  resize_dims = list(map(lambda x: int(x*(1+resample_margin)),output_wh))
+  margin_wh = [ r-o for r,o in zip(resize_dims,output_wh)]
+  #Open Image
+  pil_img = Image.open(file_name)
+  pil_img = pil_img.resize(resize_dims,Image.ANTIALIAS)
+  #Get Bbools for data augmentation
+  flip_h = np.random.choice([True,False],size=1,p=[flip_h_prob,1-flip_h_prob])[0]
+  flip_v = np.random.choice([True,False],size=1,p=[flip_v_prob,1-flip_v_prob])[0]
+  add_noise_bool = np.random.choice([True,False],size=1,p=[add_noise_prob,1-add_noise_prob])[0]
+  mult_noise_bool = np.random.choice([True,False],size=1,p=[mult_noise_prob,1-mult_noise_prob])[0]
+  add_shift_bool = np.random.choice([True,False],size=1,p=[add_shift_prob,1-add_shift_prob])[0]
+  mult_shift_bool = np.random.choice([True,False],size=1,p=[mult_shift_prob,1-mult_shift_prob])[0]
+  #Flipping
+  if flip_h:
+    pil_img = pil_img.transpose(Image.FLIP_LEFT_RIGHT)
+  if flip_v:
+    pil_img = pil_img.transpose(Image.FLIP_TOP_BOTTOM)
+  #Resampling from image
+  np_img = np.asarray(pil_img)
+  sw = np.random.randint(0,margin_wh[0])
+  sh = np.random.randint(0,margin_wh[1])
+  np_img = np_img[sw:sw+output_wh[0],sh:sh+output_wh[1],:]
+  if add_noise_bool:
+    #print("Additive noise")
+    additive_noise = np.random.normal(0,add_noise_std,size=np_img.shape)
+    np_img= np_img+additive_noise
+    np_img = correct_limits(np_img)
+    #np_img[np_img<0]=0
+    #np_img[np_img>255]=255
+  if mult_noise_bool:
+    #print("Multiplicative noise")
+    low = 1 - mult_noise_var
+    high = 1 + mult_noise_var
+    m_noise = np.random.rand(*np_img.shape)*2*mult_noise_var + low
+    np_img= np_img*m_noise
+    np_img = correct_limits(np_img)
+  #Color shift
+  if add_shift_bool:
+    #print("Additive shift")
+    shift_dims_n = np.random.randint(1,np_img.shape[2]+1)
+    shift_dims = np.random.choice(np.arange(np_img.shape[2]),shift_dims_n,replace=False)
+    tnp = np_img.copy()
+    for color_dim in shift_dims:
+      color_shift = np.random.randint(0,shift_add_max)
+      #print(shift_dims,color_shift)
+      tnp[:,:,color_dim]+=color_shift
+    np_img = correct_limits(tnp)
+  if mult_shift_bool:
+    #print("Multiplicative shift")
+    shift_dims_n = np.random.randint(1,np_img.shape[2]+1)
+    shift_dims = np.random.choice(np.arange(np_img.shape[2]),shift_dims_n,replace=False)
+    tnp = np_img.copy()
+    for color_dim in shift_dims:
+      low = 1 - shift_mult_var
+      high = 1 + shift_mult_var
+      m_shift = np.random.rand()*2*shift_mult_var + low
+      tnp[:,:,color_dim]= tnp[:,:,color_dim] * m_shift
+    np_img = correct_limits(tnp)
+  #Normalize
+  if norm==True:
+    np_img = np_img/255
+  if reshape_batch==True:
+    np_img = np_img.reshape(1,*np_img.shape)
+  return np_img.copy()
