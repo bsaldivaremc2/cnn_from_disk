@@ -403,7 +403,11 @@ def bryan_image_generation(file_name,resample_margin=0.2,output_wh = [256,256],
   sw = np.random.randint(0,margin_wh[0])
   sh = np.random.randint(0,margin_wh[1])
   if len(np_img.shape)==2:
-    np_img = np_img.reshape(np_img.shape[0],np_img.shape[1],1)
+    new_dims = []
+    #np_img = np_img.reshape(np_img.shape[0],np_img.shape[1],1)
+    for _ in range(3):
+      new_dims.append(np_img)
+    np_img = np.dstack(new_dims)
   np_img = np_img[sw:sw+output_wh[0],sh:sh+output_wh[1],:]
   if add_noise_bool:
     #print("Additive noise")
