@@ -351,10 +351,10 @@ def make_dir(idir):
         os.makedirs(idir)
 
 
-def bryan_image_generation(file_name,resample_margin=0.2,output_wh = [256,256],
+def bryan_image_generation(file_name,file_name_2=None,resample_margin=0.2,output_wh = [256,256],
                            flip_h_prob=0.5,flip_v_prob=0.5,add_noise_prob = 0.5,mult_noise_prob = 0.5,add_shift_prob = 0.5,mult_shift_prob = 0.5,
                             add_noise_std = 16,mult_noise_var = 0.25, shift_add_max = 30, shift_mult_var = 0.125,norm=True,reshape_batch=True,
-                           zip_file=None,file_name_2=None
+                           zip_file=None
                           ):
   """
   Given an Image file name location, load an image at which apply noise addition, multiplication, 
@@ -417,7 +417,7 @@ def bryan_image_generation(file_name,resample_margin=0.2,output_wh = [256,256],
         o_np_img = np.dstack(new_dims)
       if to_3==True:
         o_np_img.reshape(o_np_img.shape[0],o_np_img.shape[1],1)
-      o_np_img = o_np_img[sw:sw+output_wh[0],sh:sh+output_wh[1],:]
+    o_np_img = o_np_img[sw:sw+output_wh[0],sh:sh+output_wh[1],:]
     return o_np_img.copy()
   np_img = resize_flip_resample(pil_img,flip_h,flip_v,repeat_3_channels=True,to_3=False)
   if type(file_name_2)==str:
