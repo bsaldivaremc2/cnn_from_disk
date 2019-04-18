@@ -398,7 +398,6 @@ def bryan_image_generation(file_name,resample_margin=0.2,output_wh = [256,256],
   if flip_v:
     pil_img = pil_img.transpose(Image.FLIP_TOP_BOTTOM)
   np_img = np.asarray(pil_img)
-  print(np_img.shape)
   pil_img.close()
   #Resampling from image
   sw = np.random.randint(0,margin_wh[0])
