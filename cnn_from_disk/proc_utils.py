@@ -354,7 +354,7 @@ def make_dir(idir):
 def bryan_image_generation(file_name,resample_margin=0.2,output_wh = [256,256],
                            flip_h_prob=0.5,flip_v_prob=0.5,add_noise_prob = 0.5,mult_noise_prob = 0.5,add_shift_prob = 0.5,mult_shift_prob = 0.5,
                             add_noise_std = 16,mult_noise_var = 0.25, shift_add_max = 30, shift_mult_var = 0.125,norm=True,reshape_batch=True,
-                           zip_file=None
+                           zip_file=None,file_name_2=None
                           ):
   """
   Given an Image file name location, load an image at which apply noise addition, multiplication, 
@@ -374,6 +374,8 @@ def bryan_image_generation(file_name,resample_margin=0.2,output_wh = [256,256],
   #For sampling
   resize_dims = list(map(lambda x: int(x*(1+resample_margin)),output_wh))
   margin_wh = [ r-o for r,o in zip(resize_dims,output_wh)]
+  sw = np.random.randint(0,margin_wh[0])
+  sh = np.random.randint(0,margin_wh[1])
   #Get Bbools for data augmentation
   flip_h = np.random.choice([True,False],size=1,p=[flip_h_prob,1-flip_h_prob])[0]
   flip_v = np.random.choice([True,False],size=1,p=[flip_v_prob,1-flip_v_prob])[0]
@@ -389,26 +391,37 @@ def bryan_image_generation(file_name,resample_margin=0.2,output_wh = [256,256],
         return pil_img.copy()
   if type(zip_file)==type(None):
     pil_img = Image.open(file_name)
+    if type(file_name_2)==str:
+      pil_img_2 = Image.open(file_name_2)
   else:
     pil_img = open_zip(zip_file,file_name)
-  pil_img = pil_img.resize(resize_dims,Image.ANTIALIAS)
-  #Flipping
-  if flip_h:
-    pil_img = pil_img.transpose(Image.FLIP_LEFT_RIGHT)
-  if flip_v:
-    pil_img = pil_img.transpose(Image.FLIP_TOP_BOTTOM)
-  np_img = np.asarray(pil_img)
-  pil_img.close()
-  #Resampling from image
-  sw = np.random.randint(0,margin_wh[0])
-  sh = np.random.randint(0,margin_wh[1])
-  if len(np_img.shape)==2:
-    new_dims = []
-    #np_img = np_img.reshape(np_img.shape[0],np_img.shape[1],1)
-    for _ in range(3):
-      new_dims.append(np_img)
-    np_img = np.dstack(new_dims)
-  np_img = np_img[sw:sw+output_wh[0],sh:sh+output_wh[1],:]
+    if type(file_name_2)==str:
+      pil_img_2 = open_zip(zip_file,file_name_2)
+  def resize_flip_resample(ipil_img,flip_h,flip_v,repeat_3_channels=True,to_3=False):
+    o_pil_img = ipil_img.resize(resize_dims,Image.ANTIALIAS)
+    #Flipping
+    if flip_h:
+      o_pil_img = o_pil_img.transpose(Image.FLIP_LEFT_RIGHT)
+    if flip_v:
+      o_pil_img = o_pil_img.transpose(Image.FLIP_TOP_BOTTOM)
+    o_np_img = np.asarray(o_pil_img)
+    o_pil_img.close()
+    ipil_img.close()
+    #Resampling from image
+    if len(o_np_img.shape)==2:
+      if repeat_3_channels==True:
+        new_dims = []
+        #np_img = np_img.reshape(np_img.shape[0],np_img.shape[1],1)
+        for _ in range(3):
+          new_dims.append(o_np_img)
+        o_np_img = np.dstack(new_dims)
+      if to_3==True:
+        o_np_img.reshape(o_np_img.shape[0],o_np_img.shape[1],1)
+      o_np_img = o_np_img[sw:sw+output_wh[0],sh:sh+output_wh[1],:]
+    return o_np_img.copy()
+  np_img = resize_flip_resample(pil_img,flip_h,flip_v,repeat_3_channels=True,to_3=False)
+  if type(file_name_2)==str:
+    clean_np = resize_flip_resample(pil_img_2,flip_h,flip_v,repeat_3_channels=False,to_3=True)
   if add_noise_bool:
     #print("Additive noise")
     additive_noise = np.random.normal(0,add_noise_std,size=np_img.shape)
@@ -450,4 +463,9 @@ def bryan_image_generation(file_name,resample_margin=0.2,output_wh = [256,256],
     np_img = np_img/255
   if reshape_batch==True:
     np_img = np_img.reshape(1,*np_img.shape)
-  return np_img.copy()
+    if type(file_name_2)==str:
+      clean_np = clean_np.reshape(1,*clean_np.shape)
+  if type(file_name_2)!=str:
+    return np_img.copy()
+  else:
+    return np_img.copy(),clean_np.copy()
