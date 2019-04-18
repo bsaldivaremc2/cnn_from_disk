@@ -144,3 +144,24 @@ def df_x_y (df,x_label,xp_label=None,yp_label=None,batch_size=5,offset=0,resize_
     else:
         return x
 
+def batch_pre_proc_from_df_xy(idf,func,func_params={},x_col='filename',y_col='target',
+                           batch_size=4,offset=4,inference=False):
+    """
+    The function *func* will receive the columns *x_col* and *y_col* as arguments and return two values.
+    Both values are returned by this function
+    """
+    start_index = offset
+    rows = idf.shape[0]
+    if start_index >= rows:
+        start_index = start_index%rows
+    end_index = start_index + batch_size
+    
+    if end_index>rows:
+        end_index = rows
+    
+    tdf = idf.iloc[start_index:end_index]
+    _xy = tdf[[x_col,y_col]].apply(lambda x:func(x[0],x[1],**func_params),1)
+    _xy = _xy.values
+    _x = np.vstack([_xy[_][0] for _ in range(_xy.shape[0])])
+    _y = np.vstack([_xy[_][0] for _ in range(_xy.shape[0])])
+    return _x.copy(),_y.copy()
