@@ -163,5 +163,5 @@ def batch_pre_proc_from_df_xy(idf,func,func_params={},x_col='filename',y_col='ta
     _xy = tdf[[x_col,y_col]].apply(lambda x:func(x[0],x[1],**func_params),1)
     _xy = _xy.values
     _x = np.vstack([_xy[_][0] for _ in range(_xy.shape[0])])
-    _y = np.vstack([_xy[_][0] for _ in range(_xy.shape[0])])
+    _y = np.vstack([_xy[_][1] for _ in range(_xy.shape[0])])
     return _x.copy(),_y.copy()
