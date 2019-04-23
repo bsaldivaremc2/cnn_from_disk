@@ -469,3 +469,80 @@ def bryan_image_generation(file_name,file_name_2=None,resample_margin=0.2,output
     return np_img.copy()
   else:
     return np_img.copy(),clean_np.copy()
+
+def cv_index_no_replace(ilist,n_fold=5):
+    n_samples = len(ilist)//n_fold
+    folds_list=[]
+    picked_items = []
+    for _ in range(n_fold-1):
+        __ = np.random.choice(ilist,n_samples,replace=False)
+        folds_list.append(__)
+        picked_items.extend(__)
+        ilist = list(filter(lambda x: x in picked_items,ilist))
+    folds_list.append(np.asarray(ilist))
+    return folds_list[:]
+
+def train_test_df(idf,test_split=0.25):
+    test_n = int(np.ceil(idf.shape[0]*0.25))
+    iv = idf.index.values
+    test_index = np.random.choice(iv,test_n,replace=False)
+    ts_df = idf.iloc[test_index,:].reset_index(drop=True)
+    train_index=list(filter( lambda x: x not in test_index,iv))
+    tr_df = idf.iloc[train_index,:].reset_index(drop=True)
+    return tr_df.copy(),ts_df.copy()
+
+
+def join_head_tail_numbers(ilist):
+    #See if odd or even
+    ll = len(ilist)
+    ll2 = ll%2
+    output_index = []
+    while(ll>0):
+        output_index.append(ilist[0])
+        _ = ilist.pop(0)
+        if len(ilist)>0:
+            output_index.append(ilist[-1])
+            _ = ilist.pop(-1)
+        ll = len(ilist)
+    return output_index[:]
+
+
+
+def train_test_df_balanced(idf,n_fold=5,class_column=None,batch_size=None):
+    classes = list(idf[class_column].unique())
+    fold_classes = []
+    for c in classes:
+        _df = idf[idf[class_column]==c].reset_index(drop=True)
+        ilist = np.arange(_df.shape[0])
+        index_groups = cv_index_no_replace(ilist[:],n_fold=n_fold)
+        fold_list = []
+        for ig in index_groups:
+            fold_list.append(_df.iloc[ig].reset_index(drop=True).copy())
+        fold_classes.append(fold_list[:])
+    mixed_folds = []
+    df_folds_list = []
+    for nf in range(n_fold):
+        tmp_list = []
+        for c in range(len(classes)):
+            tmp_list.append(fold_classes[c][nf][:])
+        df_folds_list.append(pd.concat(tmp_list[:],0).reset_index(drop=True))
+    #Getting the nfolds
+    output_folds = []
+    for nf in range(n_fold):
+        possible_indexes = [_ for _ in range(n_fold)]
+        test_index = nf
+        _ = possible_indexes.pop(nf)
+        train_index = possible_indexes
+        train_folds = []
+        for _ in train_index:
+            train_folds.append(df_folds_list[_].copy())
+        #Test
+        test_fold = df_folds_list[test_index]
+        test_balance_index = join_head_tail_numbers(list(np.arange(test_fold.shape[0])))
+        test_fold = test_fold.iloc[test_balance_index].reset_index(drop=True)
+        #Train
+        train_fold = pd.concat(train_folds,0).reset_index(drop=True)
+        train_balance_index = join_head_tail_numbers(list(np.arange(train_fold.shape[0])))
+        train_fold = train_fold.iloc[train_balance_index].reset_index(drop=True)
+        output_folds.append([train_fold.copy(),test_fold.copy()])
+    return output_folds[:]
