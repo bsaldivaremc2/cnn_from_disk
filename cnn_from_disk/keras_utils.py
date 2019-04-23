@@ -12,6 +12,8 @@ from keras.applications import MobileNet
 from keras.applications.inception_resnet_v2 import InceptionResNetV2
 from keras.applications.densenet import DenseNet121
 from keras.applications.xception import Xception
+from .proc_utils import *
+from .batch_funcs import *
 
 def sens_spec(tp,tn,fp,fn,epsilon=1e-8):
   sens = tp/(tp+fn+epsilon)
