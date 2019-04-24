@@ -61,12 +61,12 @@ def parse_metrics(metrics,metric_names):
       metrics_dic[metric_name]=np.mean(metric)
     else:
       metrics_dic[metric_name]=sum(metric)  
-    sens,spec = sens_spec(*[metrics_dic[k] for k in ["tp","tn","fp","fn"]])
-    metrics_dic['sensibility']=sens
-    metrics_dic['specificity']=spec
-    metric_str=""
-    for k in ["Loss","accuracy","tp","tn","fp","fn","sensibility","specificity"]:
-      metric_str+=k+":"+str(np.round(metrics_dic[k],6))+"," 
+  sens,spec = sens_spec(*[metrics_dic[k] for k in ["tp","tn","fp","fn"]])
+  metrics_dic['sensibility']=sens
+  metrics_dic['specificity']=spec
+  metric_str=""
+  for k in ["Loss","accuracy","tp","tn","fp","fn","sensibility","specificity"]:
+    metric_str+=k+":"+str(np.round(metrics_dic[k],6))+"," 
   return metrics_dic.copy(),metric_str
 
 def append_on_file(ifile,istr):
