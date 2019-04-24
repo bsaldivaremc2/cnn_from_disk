@@ -152,7 +152,7 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
             iter_metric_str = ""
             for _ in range(len(metric_names)):
                 iter_metric_str+=metric_names[_]+":"+str(metrics[_])+"."
-            test_batch_str = "Testing. Batch",test_batch,"/",test_batches,".",iter_metric_str
+            test_batch_str = "Testing. Batch"+str(test_batch)+"/"+str(test_batches)+"."+iter_metric_str
             if v==True:
                 print(test_batch_str)
             append_on_file(log_file_name,test_batch_str )
