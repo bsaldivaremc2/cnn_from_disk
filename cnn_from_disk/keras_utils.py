@@ -148,7 +148,7 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
          test_batches = int(np.ceil(test_df.shape[0]/ batch_size))
          for test_batch in range(test_batches):
             offset = test_batch*batch_size
-            xdf,ydf = batch_func(test_df,xfunc,yfunc,xfunc_params=xfunc_params,x_col=x_col,y_col=y_col,batch_size=batch_size,offset=offset,inference=False)
+            xdf,ydf = batch_func(test_df,xfunc,yfunc,xfunc_params=test_params,x_col=x_col,y_col=y_col,batch_size=batch_size,offset=offset,inference=False)
             metrics = model.evaluate(xdf,ydf,verbose=0)
             iter_metric_str = ""
             for _ in range(len(metric_names)):
