@@ -78,9 +78,10 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
 	x_col='filename',y_col='target',xfunc=bryan_image_generation,batch_func=batch_pre_proc_from_df,
 	xfunc_params={'output_wh':[224,224],'add_noise_std':10,'mult_noise_var':0.10, 'shift_add_max':15, 'shift_mult_var' :0.05},
 	test_params = {'output_wh':[224,224],'flip_h_prob':0,'flip_v_prob':0,'add_noise_prob':0,'mult_noise_prob':0,'add_shift_prob':0,'mult_shift_prob':0},
+	yfunc_params={},	      
 	yfunc=pass_y,batch_size=8,learning_rate=0.1,decay=1e-8,iterations = 128,test_save_each_iter = 2,v=True,sensibility_th=0.99,specificity_th=0.99):
     print("Testing functions")
-    xdf, ydf = batch_func(train_df,xfunc,yfunc,xfunc_params={},yfunc_params={},x_col=x_col,y_col=y_col,batch_size=batch_size,offset=0,inference=False)
+    xdf, ydf = batch_func(train_df,xfunc,yfunc,xfunc_params=xfunc_params,yfunc_params=yfunc_params,x_col=x_col,y_col=y_col,batch_size=batch_size,offset=0,inference=False)
     print("Function passed")
     models = {'MobileNet':MobileNet,'InceptionResNetV2':InceptionResNetV2,'DenseNet121':DenseNet121,'Xception':Xception}
     base_model = models[model](**model_kargs)
