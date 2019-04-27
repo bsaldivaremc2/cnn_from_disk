@@ -173,3 +173,19 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
                 print("Saved a new best model with metric:",best_model_save_name)
     #
     model.save(save_dir+model_name+".h5")
+    return model
+
+def predict_model(idf,imodel,batch_func,batch_func_args):
+    n = idf.shape[0]
+    batch_size = batch_func_args['batch_size']
+    batch_func_args['inference']=True
+    batches = int(np.ceil(n/ batch_size))
+    preds = []
+    for test_batch in range(test_batches):
+        xdf = batch_func(idf,**batch_func_args)
+        predx = imodel.predict(xdf)
+        preds.append(predx.copy())
+    preds = np.vstack(preds)
+    return preds.copy()
+
+
