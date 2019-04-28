@@ -186,16 +186,17 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
                 print("Saved a new best model with metric:",best_model_save_name)
     #
     #pred_df=None,predict_each_iter=1,post_pred_func=None,pred_save_dir=None,
-         if (type(pred_df)!=type(pred_df)) and (iterx%predict_each_iter==0):
-            pred_save_name = 'iter_'+str(iterx)+"_predictions"
-            predictions = predict_model(pred_df,model,pred_batch_func,pred_batch_func_args)
-            make_dir(pred_save_dir)
-            if type(post_pred_func)!=type(None):
-                post_pred_func(predictions)
-            else:
-                if pred_save_dir[-1]!='/':
-                    pred_save_dir+='/'
-                save_obj(predictions,pred_save_dir+pred_save_name)
+      if (type(pred_df)!=type(None)) and (iterx%predict_each_iter==0):
+        print("Predicting")
+        pred_save_name = 'iter_'+str(iterx)+"_predictions"
+        predictions = predict_model(pred_df,model,pred_batch_func,pred_batch_func_args)
+        make_dir(pred_save_dir)
+        if type(post_pred_func)!=type(None):
+          post_pred_func(predictions)
+        else:
+          if pred_save_dir[-1]!='/':
+            pred_save_dir+='/'
+          save_obj(predictions,pred_save_dir+pred_save_name)
     save_model(model,save_dir+model_name,save_model_with_pickle)
     return model
 
