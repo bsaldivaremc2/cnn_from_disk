@@ -195,7 +195,7 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
             else:
                 if pred_save_dir[-1]!='/':
                     pred_save_dir+='/'
-                save_obj(predictions,pred_save_dir+save_name)
+                save_obj(predictions,pred_save_dir+pred_save_name)
     save_model(model,save_dir+model_name,save_model_with_pickle)
     return model
 
