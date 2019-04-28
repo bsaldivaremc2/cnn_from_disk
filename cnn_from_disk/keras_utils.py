@@ -80,7 +80,7 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
 	test_params = {'output_wh':[224,224],'flip_h_prob':0,'flip_v_prob':0,'add_noise_prob':0,'mult_noise_prob':0,'add_shift_prob':0,'mult_shift_prob':0},
 	yfunc_params={},	      
 	yfunc=pass_y,batch_size=8,learning_rate=0.1,decay=1e-8,iterations = 128,test_save_each_iter = 2,v=True,sensibility_th=0.99,specificity_th=0.99,
-	pred_df=None,predict_each_iter=1,post_pred_func=None,pred_save_dir=None,pred_batch_func,pred_batch_func_args={},save_model_with_pickle=False):
+	pred_df=None,predict_each_iter=1,post_pred_func=None,pred_save_dir=None,pred_batch_func=None,pred_batch_func_args={},save_model_with_pickle=False):
     """
     folds = train_test_df_balanced(dft,class_column='class')
     train_df, test_df = folds[cv]
