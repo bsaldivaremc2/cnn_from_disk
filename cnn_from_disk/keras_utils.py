@@ -200,14 +200,14 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
     return model
 
 def predict_model(idf,imodel,batch_func,batch_func_args):
-  """
-  Example of usage
-  batch_func_args = {'xfunc':bryan_image_generation,'yfunc':pass_y,
+    """
+    Example of usage
+    batch_func_args = {'xfunc':bryan_image_generation,'yfunc':pass_y,
                   'xfunc_params':{'output_wh':[224,224],'flip_h_prob':0,'flip_v_prob':0,'add_noise_prob':0,'mult_noise_prob':0,'add_shift_prob':0,'mult_shift_prob':0,'zip_file':trainz},
                   'yfunc_params':{},'x_col':'file','y_col':'target',
                            'batch_size':8,'offset':0,'inference':True}
-  p = predict_model(train_df,modelx,batch_pre_proc_from_df,batch_func_args)
-  """
+    p = predict_model(train_df,modelx,batch_pre_proc_from_df,batch_func_args)
+    """
     n = idf.shape[0]
     batch_size = batch_func_args['batch_size']
     batch_func_args['inference']=True
