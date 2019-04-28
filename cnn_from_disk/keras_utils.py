@@ -186,7 +186,7 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
                 print("Saved a new best model with metric:",best_model_save_name)
     #
     #pred_df=None,predict_each_iter=1,post_pred_func=None,pred_save_dir=None,
-        if (type(pred_df)!=type(pred_df)) and (iterx%predict_each_iter==0):
+         if (type(pred_df)!=type(pred_df)) and (iterx%predict_each_iter==0):
             pred_save_name = 'iter_'+str(iterx)+"_predictions"
             predictions = predict_model(pred_df,model,pred_batch_func,pred_batch_func_args)
             make_dir(pred_save_dir)
