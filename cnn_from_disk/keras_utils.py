@@ -79,7 +79,8 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
 	xfunc_params={'output_wh':[224,224],'add_noise_std':10,'mult_noise_var':0.10, 'shift_add_max':15, 'shift_mult_var' :0.05},
 	test_params = {'output_wh':[224,224],'flip_h_prob':0,'flip_v_prob':0,'add_noise_prob':0,'mult_noise_prob':0,'add_shift_prob':0,'mult_shift_prob':0},
 	yfunc_params={},	      
-	yfunc=pass_y,batch_size=8,learning_rate=0.1,decay=1e-8,iterations = 128,test_save_each_iter = 2,v=True,sensibility_th=0.99,specificity_th=0.99):
+	yfunc=pass_y,batch_size=8,learning_rate=0.1,decay=1e-8,iterations = 128,test_save_each_iter = 2,v=True,sensibility_th=0.99,specificity_th=0.99,
+	pred_df=None,predict_each_iter=1,post_pred_func=None,pred_save_dir=None,pred_batch_func,pred_batch_func_args={},save_model_with_pickle=False):
     """
     folds = train_test_df_balanced(dft,class_column='class')
     train_df, test_df = folds[cv]
@@ -154,7 +155,7 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
       if iterx%test_save_each_iter==0:
          print("Testing")
          losss,accs,tps,tns,fps,fns = [],[],[],[],[],[]
-         model.save(save_dir+model_name+".h5")
+         save_model(model,save_dir+model_name,save_model_with_pickle)
          #Test model:
          metrics = []
          test_batches = int(np.ceil(test_df.shape[0]/ batch_size))
@@ -181,10 +182,21 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
             save_tail = metric_str.replace(":","_").replace(",","_")
             best_model_save_name = save_dir+best_model_name+save_tail+"_iter_"+str(iterx)+".h5"
             if save_test_over_th==True:
-                model.save(best_model_save_name)
+                save_model(model,best_model_save_name,save_model_with_pickle)
                 print("Saved a new best model with metric:",best_model_save_name)
     #
-    model.save(save_dir+model_name+".h5")
+    #pred_df=None,predict_each_iter=1,post_pred_func=None,pred_save_dir=None,
+        if (type(pred_df)!=type(pred_df)) and (iterx%predict_each_iter==0):
+            pred_save_name = 'iter_'+str(iterx)+"_predictions"
+            predictions = predict_model(pred_df,model,pred_batch_func,pred_batch_func_args)
+            make_dir(pred_save_dir)
+            if type(post_pred_func)!=type(None):
+                post_pred_func(predictions)
+            else:
+                if pred_save_dir[-1]!='/':
+                    pred_save_dir+='/'
+                save_obj(predictions,pred_save_dir+save_name)
+    save_model(model,save_dir+model_name,save_model_with_pickle)
     return model
 
 def predict_model(idf,imodel,batch_func,batch_func_args):
@@ -208,4 +220,23 @@ def predict_model(idf,imodel,batch_func,batch_func_args):
         preds.append(predx.copy())
     preds = np.vstack(preds)
     return preds.copy()
+
+ 
+def save_obj(obj,name):
+  import pickle
+  with open(name+'.pkl', 'wb') as f:
+    pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
+    print(name+".pkl saved")
+
+def load_obj(name):
+  import pickle
+  with open(name+'.pkl', 'rb') as f:
+    return pickle.load(f)
+
+def save_model(imodel,model_save_name,save_model_with_pickle=False):
+    if save_model_with_pickle==True:
+        save_obj(imodel,model_save_name)
+    else:
+        imodel.save(model_save_name+'.h5')
+
 
