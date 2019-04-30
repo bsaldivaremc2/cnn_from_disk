@@ -81,7 +81,7 @@ def keras_train_model(train_df,test_df,save_dir,model_name,save_test_over_th=Tru
 	yfunc_params={},	      
 	yfunc=pass_y,batch_size=8,learning_rate=0.1,decay=1e-8,iterations = 128,test_save_each_iter = 2,v=True,sensibility_th=0.99,specificity_th=0.99,
 	pred_df=None,predict_each_iter=1,post_pred_func=None,pred_save_dir=None,pred_batch_func=None,pred_batch_func_args={},save_model_with_pickle=False,del_model=True,
-  keras_compile_kargs={'keras_loss':'categorical_crossentropy','loss_weights':None,'metrics':['accuracy',tp,tn,fp,fn]},
+  keras_compile_kargs={'loss':'categorical_crossentropy','loss_weights':None,'metrics':['accuracy',tp,tn,fp,fn]},
   keras_fit_kargs={'class_weights':None}):
     """
     folds = train_test_df_balanced(dft,class_column='class')
