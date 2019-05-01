@@ -546,3 +546,134 @@ def train_test_df_balanced(idf,n_fold=5,class_column=None,batch_size=None):
         train_fold = train_fold.iloc[train_balance_index].reset_index(drop=True)
         output_folds.append([train_fold.copy(),test_fold.copy()])
     return output_folds[:]
+
+
+def sample_box_and_noise(filename,sample_box_kargs={},noise_kargs={}):
+    _onp = sample_box(filename,**sample_box_kargs)
+    _onp = bryan_noise_generation_inp(_onp,**noise_kargs)
+    return _onp.copy()
+
+def sample_box(filename,kernel_width=33):
+    from scipy import ndimage 
+    from scipy import misc
+    kw = kernel_width
+    k =np.ones((kw,kw))
+    kww = kw//2
+    pi = Image.open(filename)
+    npi = np.asarray(pi)
+    npi2d = npi.sum(2)
+    npi2d[npi2d>0]=1
+    ik = ndimage.convolve(npi2d, k, mode='constant', cval=0.0)
+    max_val = ik.max()
+    ik[ik!=kw**2]=0
+    ik[ik==kw**2]=1
+    possible_patches = list(np.where(ik==1))
+    row_patch_pos,col_patch_pos = possible_patches
+    patch_pos = np.random.choice(np.arange(row_patch_pos.shape[0]),1)[0]
+    ri = row_patch_pos[patch_pos]
+    ci = col_patch_pos[patch_pos]
+    ris,rie = ri-kww,ri+kww
+    cis,cie = ci-kww,ci+kww
+    sample = npi[ris:rie,cis:cie,:]
+    #sample = misc.imresize(sample,output_wh)
+    return sample.copy()
+
+def bryan_noise_generation_inp(inp,output_wh=[224,224],resample_margin=0.05,
+                           flip_h_prob=0.5,flip_v_prob=0.5,add_noise_prob = 0.5,mult_noise_prob = 0.5,add_shift_prob = 0.5,mult_shift_prob = 0.5,
+                            add_noise_std = 16,mult_noise_var = 0.25, shift_add_max = 30, shift_mult_var = 0.125,norm=True,reshape_batch=True,
+                            repeat_3_channels=False,to_3=False
+                          ):
+  """
+  Given an Image file name location, load an image at which apply noise addition, multiplication, 
+  color shift addition and multiplication, resampling a piece of the image with a margin *resample_margin*, 
+  if norm=True, the image will be divided by 255
+  if reshape_batch=True then the ouput will be a numpy array of dimmensions [1,w,h,channels]
+  zip_file: if not None, the string name of the zip file that contains the file_name
+  """
+  
+  def correct_limits(iinp):
+    inp = iinp.copy()
+    inp[inp<0]=0
+    inp[inp>255]=255
+    return inp.copy()
+  import numpy as np
+  from PIL import Image
+  resize_dims = list(map(lambda x: int(x*(1+resample_margin)),output_wh))
+  margin_wh = [ r-o for r,o in zip(resize_dims,output_wh)]
+  sw = np.random.randint(0,margin_wh[0])
+  sh = np.random.randint(0,margin_wh[1])
+  #Get Bbools for data augmentation
+  flip_h = np.random.choice([True,False],size=1,p=[flip_h_prob,1-flip_h_prob])[0]
+  flip_v = np.random.choice([True,False],size=1,p=[flip_v_prob,1-flip_v_prob])[0]
+  add_noise_bool = np.random.choice([True,False],size=1,p=[add_noise_prob,1-add_noise_prob])[0]
+  mult_noise_bool = np.random.choice([True,False],size=1,p=[mult_noise_prob,1-mult_noise_prob])[0]
+  add_shift_bool = np.random.choice([True,False],size=1,p=[add_shift_prob,1-add_shift_prob])[0]
+  mult_shift_bool = np.random.choice([True,False],size=1,p=[mult_shift_prob,1-mult_shift_prob])[0]
+  #Open Image
+  def resize_flip_resample(ipil_img,flip_h,flip_v,repeat_3_channels=True,to_3=False):
+    o_pil_img = ipil_img.resize(resize_dims,Image.ANTIALIAS)
+    #Flipping
+    if flip_h:
+      o_pil_img = o_pil_img.transpose(Image.FLIP_LEFT_RIGHT)
+    if flip_v:
+      o_pil_img = o_pil_img.transpose(Image.FLIP_TOP_BOTTOM)
+    o_np_img = np.asarray(o_pil_img)
+    o_pil_img.close()
+    ipil_img.close()
+    #Resampling from image
+    if len(o_np_img.shape)==2:
+      if repeat_3_channels==True:
+        new_dims = []
+        #np_img = np_img.reshape(np_img.shape[0],np_img.shape[1],1)
+        for _ in range(3):
+          new_dims.append(o_np_img)
+        o_np_img = np.dstack(new_dims)
+      if to_3==True:
+        o_np_img = o_np_img.reshape(o_np_img.shape[0],o_np_img.shape[1],1)
+    o_np_img = o_np_img[sw:sw+output_wh[0],sh:sh+output_wh[1],:]
+    return o_np_img.copy()
+  pil_img = Image.fromarray(inp)
+  np_img = resize_flip_resample(pil_img,flip_h,flip_v,repeat_3_channels=repeat_3_channels,to_3=to_3)
+  if add_noise_bool:
+    #print("Additive noise")
+    additive_noise = np.random.normal(0,add_noise_std,size=np_img.shape)
+    np_img= np_img+additive_noise
+    np_img = correct_limits(np_img)
+    #np_img[np_img<0]=0
+    #np_img[np_img>255]=255
+  if mult_noise_bool:
+    #print("Multiplicative noise")
+    low = 1 - mult_noise_var
+    high = 1 + mult_noise_var
+    m_noise = np.random.rand(*np_img.shape)*2*mult_noise_var + low
+    np_img= np_img*m_noise
+    np_img = correct_limits(np_img)
+  #Color shift
+  if add_shift_bool:
+    #print("Additive shift")
+    shift_dims_n = np.random.randint(1,np_img.shape[2]+1)
+    shift_dims = np.random.choice(np.arange(np_img.shape[2]),shift_dims_n,replace=False)
+    tnp = np_img.copy()
+    for color_dim in shift_dims:
+      color_shift = np.random.randint(0,shift_add_max)
+      #print(shift_dims,color_shift)
+      tnp[:,:,color_dim]+=color_shift
+    np_img = correct_limits(tnp)
+  if mult_shift_bool:
+    #print("Multiplicative shift")
+    shift_dims_n = np.random.randint(1,np_img.shape[2]+1)
+    shift_dims = np.random.choice(np.arange(np_img.shape[2]),shift_dims_n,replace=False)
+    tnp = np_img.copy()
+    for color_dim in shift_dims:
+      low = 1 - shift_mult_var
+      high = 1 + shift_mult_var
+      m_shift = np.random.rand()*2*shift_mult_var + low
+      tnp[:,:,color_dim]= tnp[:,:,color_dim] * m_shift
+    np_img = correct_limits(tnp)
+  #Normalize
+  if norm==True:
+    np_img = np_img/255
+  if reshape_batch==True:
+    np_img = np_img.reshape(1,*np_img.shape)
+  return np_img.copy()
+
