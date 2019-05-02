@@ -25,6 +25,28 @@ def batch_pre_proc_from_df(idf,xfunc,yfunc,xfunc_params={},yfunc_params={},x_col
     else:
         return _x.copy()
 
+
+def batch_pre_proc_from_df_unbalanced(idf,xfunc,yfunc,xfunc_params={},yfunc_params={},x_col='filename',y_col='target',
+                           batch_size=4,offset=4,inference=False,class_column='class'):
+    #sample a batch that tries to sample half of 2 classes
+    classes = list(idf['class'].unique())
+    class_batch_size = batch_size//len(classes)
+    class_batches = []
+    for classx in classes:
+        class_df = idf[idf['class']==classx]
+        classx_batch_size = min(class_df.shape[0],class_batch_size)
+        class_bach = class_df.sample(classx_batch_size).reset_index(drop=True)
+        class_batches.append(class_bach.copy())
+    tdf = pd.concat(class_batches,0)
+    #
+    _x = np.vstack(tdf[x_col].apply(xfunc,**xfunc_params))
+    if inference == False:
+        _y = np.vstack(tdf[y_col].apply(yfunc,**yfunc_params))
+        return _x.copy(),_y.copy()
+    else:
+        return _x.copy()
+
+
 def batch_pre_proc_from_df_yf(idf,xfunc,yfunc,yfunc2,xfunc_params={},yfunc_params={},yfunc2_params={},x_col='filename',y_col='target',
                            batch_size=4,offset=4,inference=False):
     """
