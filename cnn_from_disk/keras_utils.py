@@ -244,7 +244,12 @@ def load_obj(name):
 def save_model(imodel,model_save_name,save_model_with_pickle=False):
     if save_model_with_pickle==True:
         save_obj(imodel,model_save_name)
-    else:
+    elif save_model_with_pickle==False:
         imodel.save(model_save_name+'.h5')
+    else:
+        pass
+
+
+
 
 
