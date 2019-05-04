@@ -478,7 +478,7 @@ def cv_index_no_replace(ilist,n_fold=5):
         __ = np.random.choice(ilist,n_samples,replace=False)
         folds_list.append(__)
         picked_items.extend(__)
-        ilist = list(filter(lambda x: x in picked_items,ilist))
+        ilist = list(filter(lambda x: x not in picked_items,ilist))
     folds_list.append(np.asarray(ilist))
     return folds_list[:]
 
