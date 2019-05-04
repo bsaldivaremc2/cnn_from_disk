@@ -249,7 +249,8 @@ def save_model(imodel,model_save_name,save_model_with_pickle=False):
     else:
         pass
 
-
+def load_model(ifile):
+  return keras.models.load_model(ifile,custom_objects={'tp': tp,'fp':fp,'tn':tn,'fn':fn})
 
 
 
