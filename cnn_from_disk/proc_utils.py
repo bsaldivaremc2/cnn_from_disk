@@ -578,19 +578,19 @@ def sample_box(filename,kernel_width=33):
     #sample = misc.imresize(sample,output_wh)
     return sample.copy()
 
-def sample_box_mosaic(filename,kernel_width=33,output_wh=224):
+def sample_box_mosaic(filename,kernel_width=32,output_wh=224):
     sample = sample_box(filename,kernel_width)
     repeat_mosaic = int(np.floor(output_wh / kernel_width))
     zeros_pad = output_wh-repeat_mosaic*kernel_width
     cols = []
     for col in range(repeat_mosaic):
         cols.append(sample.copy())
-    cols.append(np.zeros((kernel_width,zeros_pad)))
+    cols.append(np.zeros((sample.shape[0],zeros_pad,3)))
     output = np.hstack(cols)
     rows = []
     for row in range(repeat_mosaic):
         rows.append(output.copy())
-    rows.append(np.zeros((zeros_pad,output.shape[1])))
+    rows.append(np.zeros((zeros_pad,output.shape[1],3)))
     output = np.vstack(rows)
     return output.copy()
 
