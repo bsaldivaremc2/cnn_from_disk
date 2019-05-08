@@ -584,7 +584,7 @@ def sample_box_mosaic(filename,kernel_width=32,output_wh=224):
     cols = []
     for col in range(repeat_mosaic):
         cols.append(sample.copy())
-    ouput = np.hstack(cols)
+    output = np.hstack(cols)
     rows = []
     for row in range(repeat_mosaic):
         rows.append(output.copy())
