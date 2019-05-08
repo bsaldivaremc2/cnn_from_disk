@@ -578,7 +578,26 @@ def sample_box(filename,kernel_width=33):
     #sample = misc.imresize(sample,output_wh)
     return sample.copy()
 
-def bryan_noise_generation_inp(inp,output_wh=[224,224],resample_margin=0.05,
+def sample_box_mosaic(filename,kernel_width=32,output_wh=224):
+    sample = sample_box(filename,kernel_width)
+    repeat_mosaic = output_wh // kernel_width
+    cols = []
+    for col in range(repeat_mosaic):
+        cols.append(sample.copy())
+    ouput = np.hstack(cols)
+    rows = []
+    for row in range(repeat_mosaic):
+        rows.append(output.copy())
+    output = np.vstack(rows)
+    return output.copy()
+
+
+def sample_box_mosaic_and_noise(filename,sample_box_kargs={},noise_kargs={}):
+    _onp = sample_box_mosaic(filename,**sample_box_kargs)
+    _onp = bryan_noise_generation_inp(_onp,**noise_kargs)
+    return _onp.copy()
+
+def bryan_noise_generation_inp(inp,output_wh=[224,224],resize=True,resample_margin=0.05,
                            flip_h_prob=0.5,flip_v_prob=0.5,add_noise_prob = 0.5,mult_noise_prob = 0.5,add_shift_prob = 0.5,mult_shift_prob = 0.5,
                             add_noise_std = 16,mult_noise_var = 0.25, shift_add_max = 30, shift_mult_var = 0.125,norm=True,reshape_batch=True,
                             repeat_3_channels=False,to_3=False
@@ -611,7 +630,9 @@ def bryan_noise_generation_inp(inp,output_wh=[224,224],resample_margin=0.05,
   mult_shift_bool = np.random.choice([True,False],size=1,p=[mult_shift_prob,1-mult_shift_prob])[0]
   #Open Image
   def resize_flip_resample(ipil_img,flip_h,flip_v,repeat_3_channels=True,to_3=False):
-    o_pil_img = ipil_img.resize(resize_dims,Image.ANTIALIAS)
+    o_pil_img = ipil_img
+    if resize==True:
+      o_pil_img = ipil_img.resize(resize_dims,Image.ANTIALIAS)
     #Flipping
     if flip_h:
       o_pil_img = o_pil_img.transpose(Image.FLIP_LEFT_RIGHT)
@@ -630,7 +651,8 @@ def bryan_noise_generation_inp(inp,output_wh=[224,224],resample_margin=0.05,
         o_np_img = np.dstack(new_dims)
       if to_3==True:
         o_np_img = o_np_img.reshape(o_np_img.shape[0],o_np_img.shape[1],1)
-    o_np_img = o_np_img[sw:sw+output_wh[0],sh:sh+output_wh[1],:]
+    if resize==True:
+      o_np_img = o_np_img[sw:sw+output_wh[0],sh:sh+output_wh[1],:]
     return o_np_img.copy()
   pil_img = Image.fromarray(inp)
   np_img = resize_flip_resample(pil_img,flip_h,flip_v,repeat_3_channels=repeat_3_channels,to_3=to_3)
