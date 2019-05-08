@@ -585,12 +585,12 @@ def sample_box_mosaic(filename,kernel_width=33,output_wh=224):
     cols = []
     for col in range(repeat_mosaic):
         cols.append(sample.copy())
-    cols.append(np.zeros(kernel_width,zeros_pad))
+    cols.append(np.zeros((kernel_width,zeros_pad)))
     output = np.hstack(cols)
     rows = []
     for row in range(repeat_mosaic):
         rows.append(output.copy())
-    rows.append(np.zeros(zeros_pad,output.shape[1]))
+    rows.append(np.zeros((zeros_pad,output.shape[1])))
     output = np.vstack(rows)
     return output.copy()
 
