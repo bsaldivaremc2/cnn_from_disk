@@ -592,7 +592,7 @@ def sample_box_mosaic(filename,kernel_width=32,output_wh=224):
         rows.append(output.copy())
     rows.append(np.zeros((zeros_pad,output.shape[1],3)))
     output = np.vstack(rows)
-    return output.copy()
+    return output.astype('uint8').copy()
 
 
 def sample_box_mosaic_and_noise(filename,sample_box_kargs={},noise_kargs={}):
