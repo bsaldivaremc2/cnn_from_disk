@@ -603,11 +603,6 @@ def sample_box_mosaic_and_noise(filename,sample_box_kargs={},noise_kargs={}):
     return _onp.copy()
 
 
-tnp = sample_box_mosaic_and_noise(filename,sample_box_kargs={'kernel_width':33,'output_wh':224},noise_kargs={'output_wh':[224,224],'resize':False,'flip_h_prob':0,'flip_v_prob':0,'add_noise_prob':0,'mult_noise_prob':0,'add_shift_prob':0,'mult_shift_prob':0,
-'resample_margin':0.05})
-
-
-
 def bryan_noise_generation_inp(inp,output_wh=[224,224],resize=True,resample_margin=0.05,
                            flip_h_prob=0.5,flip_v_prob=0.5,add_noise_prob = 0.5,mult_noise_prob = 0.5,add_shift_prob = 0.5,mult_shift_prob = 0.5,
                             add_noise_std = 16,mult_noise_var = 0.25, shift_add_max = 30, shift_mult_var = 0.125,norm=True,reshape_batch=True,
