@@ -580,17 +580,19 @@ def sample_box(filename,kernel_width=33):
 
 def sample_box_mosaic(filename,kernel_width=32,output_wh=224):
     sample = sample_box(filename,kernel_width)
-    repeat_mosaic = int(np.floor(output_wh / kernel_width))
-    zeros_pad = output_wh-repeat_mosaic*kernel_width
+    repeat_mosaic = int(np.floor(output_wh / sample.shape[0]))
+    zeros_pad = output_wh-repeat_mosaic*sample.shape[0]
     cols = []
     for col in range(repeat_mosaic):
         cols.append(sample.copy())
-    cols.append(np.zeros((sample.shape[0],zeros_pad,3)))
+    colz = np.zeros((sample.shape[0],zeros_pad,3))
+    cols.append(colz)
     output = np.hstack(cols)
     rows = []
     for row in range(repeat_mosaic):
         rows.append(output.copy())
-    rows.append(np.zeros((zeros_pad,output.shape[1],3)))
+    rowsz = np.zeros((zeros_pad,output.shape[1],3))
+    rows.append(rowsz)
     output = np.vstack(rows)
     return output.astype('uint8').copy()
 
@@ -599,6 +601,12 @@ def sample_box_mosaic_and_noise(filename,sample_box_kargs={},noise_kargs={}):
     _onp = sample_box_mosaic(filename,**sample_box_kargs)
     _onp = bryan_noise_generation_inp(_onp,**noise_kargs)
     return _onp.copy()
+
+
+tnp = sample_box_mosaic_and_noise(filename,sample_box_kargs={'kernel_width':33,'output_wh':224},noise_kargs={'output_wh':[224,224],'resize':False,'flip_h_prob':0,'flip_v_prob':0,'add_noise_prob':0,'mult_noise_prob':0,'add_shift_prob':0,'mult_shift_prob':0,
+'resample_margin':0.05})
+
+
 
 def bryan_noise_generation_inp(inp,output_wh=[224,224],resize=True,resample_margin=0.05,
                            flip_h_prob=0.5,flip_v_prob=0.5,add_noise_prob = 0.5,mult_noise_prob = 0.5,add_shift_prob = 0.5,mult_shift_prob = 0.5,
@@ -632,7 +640,7 @@ def bryan_noise_generation_inp(inp,output_wh=[224,224],resize=True,resample_marg
   add_shift_bool = np.random.choice([True,False],size=1,p=[add_shift_prob,1-add_shift_prob])[0]
   mult_shift_bool = np.random.choice([True,False],size=1,p=[mult_shift_prob,1-mult_shift_prob])[0]
   #Open Image
-  def resize_flip_resample(ipil_img,flip_h,flip_v,repeat_3_channels=True,to_3=False):
+  def resize_flip_resample(ipil_img,flip_h,flip_v,repeat_3_channels=True,to_3=False,resize=False):
     o_pil_img = ipil_img
     if resize==True:
       o_pil_img = ipil_img.resize(resize_dims,Image.ANTIALIAS)
@@ -658,7 +666,7 @@ def bryan_noise_generation_inp(inp,output_wh=[224,224],resize=True,resample_marg
       o_np_img = o_np_img[sw:sw+output_wh[0],sh:sh+output_wh[1],:]
     return o_np_img.copy()
   pil_img = Image.fromarray(inp)
-  np_img = resize_flip_resample(pil_img,flip_h,flip_v,repeat_3_channels=repeat_3_channels,to_3=to_3)
+  np_img = resize_flip_resample(pil_img,flip_h,flip_v,repeat_3_channels=repeat_3_channels,to_3=to_3,resize=resize)
   if add_noise_bool:
     #print("Additive noise")
     additive_noise = np.random.normal(0,add_noise_std,size=np_img.shape)
