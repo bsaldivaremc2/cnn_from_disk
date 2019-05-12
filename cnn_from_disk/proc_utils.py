@@ -580,8 +580,8 @@ def sample_box(filename,kernel_width=33,middle=True):
     #sample = misc.imresize(sample,output_wh)
     return sample.copy()
 
-def sample_box_mosaic(filename,kernel_width=32,output_wh=224):
-    sample = sample_box(filename,kernel_width)
+def sample_box_mosaic(filename,kernel_width=32,output_wh=224,middle=False):
+    sample = sample_box(filename,kernel_width,middle)
     repeat_mosaic = int(np.floor(output_wh / sample.shape[0]))
     zeros_pad = output_wh-repeat_mosaic*sample.shape[0]
     cols = []
