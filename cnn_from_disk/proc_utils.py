@@ -553,7 +553,7 @@ def sample_box_and_noise(filename,sample_box_kargs={},noise_kargs={}):
     _onp = bryan_noise_generation_inp(_onp,**noise_kargs)
     return _onp.copy()
 
-def sample_box(filename,kernel_width=33):
+def sample_box(filename,kernel_width=33,middle=True):
     from scipy import ndimage 
     from scipy import misc
     kw = kernel_width
@@ -570,6 +570,8 @@ def sample_box(filename,kernel_width=33):
     possible_patches = list(np.where(ik==1))
     row_patch_pos,col_patch_pos = possible_patches
     patch_pos = np.random.choice(np.arange(row_patch_pos.shape[0]),1)[0]
+    if middle==True:
+        patch_pos=row_patch_pos.shape[0]//2
     ri = row_patch_pos[patch_pos]
     ci = col_patch_pos[patch_pos]
     ris,rie = ri-kww,ri+kww
